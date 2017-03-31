@@ -1,6 +1,7 @@
 require File.expand_path('../../../spec_helper', __FILE__)
 require File.expand_path('../fixtures/classes', __FILE__)
 require File.expand_path('../shared/iteration', __FILE__)
+require File.expand_path('../../enumerable/shared/enumeratorized', __FILE__)
 
 describe "Hash#reject" do
   it "returns a new hash removing keys for which the block yields true" do
@@ -47,6 +48,7 @@ describe "Hash#reject" do
   end
 
   it_behaves_like(:hash_iteration_no_block, :reject)
+  it_behaves_like(:enumeratorized_with_origin_size, :reject, new_hash(1 => 2, 3 => 4, 5 => 6))
 end
 
 describe "Hash#reject!" do
@@ -77,22 +79,14 @@ describe "Hash#reject!" do
     reject_bang_pairs.should == delete_if_pairs
   end
 
-  ruby_version_is ""..."1.9" do
-    it "raises a TypeError if called on a frozen instance" do
-      lambda { HashSpecs.frozen_hash.reject! { false } }.should raise_error(TypeError)
-      lambda { HashSpecs.empty_frozen_hash.reject! { true } }.should raise_error(TypeError)
-    end
+  it "raises a RuntimeError if called on a frozen instance that is modified" do
+    lambda { HashSpecs.empty_frozen_hash.reject! { true } }.should raise_error(RuntimeError)
   end
 
-  ruby_version_is "1.9" do
-    it "raises a RuntimeError if called on a frozen instance that is modified" do
-      lambda { HashSpecs.empty_frozen_hash.reject! { true } }.should raise_error(RuntimeError)
-    end
-
-    it "raises a RuntimeError if called on a frozen instance that would not be modified" do
-      lambda { HashSpecs.frozen_hash.reject! { false } }.should raise_error(RuntimeError)
-    end
+  it "raises a RuntimeError if called on a frozen instance that would not be modified" do
+    lambda { HashSpecs.frozen_hash.reject! { false } }.should raise_error(RuntimeError)
   end
 
   it_behaves_like(:hash_iteration_no_block, :reject!)
+  it_behaves_like(:enumeratorized_with_origin_size, :reject!, new_hash(1 => 2, 3 => 4, 5 => 6))
 end

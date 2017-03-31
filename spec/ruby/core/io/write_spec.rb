@@ -20,9 +20,7 @@ describe "IO#write on a file" do
     rm_r @filename
   end
 
-  # TODO: impl detail? discuss this with matz. This spec is useless. - rdavis
-  # I agree. I've marked it not compliant on macruby, as we don't buffer input. -pthomson
-  not_compliant_on :macruby do
+  not_compliant_on :macruby, :rubinius do
     it "writes all of the string's bytes but buffers them" do
       written = @file.write("abcde")
       written.should == 5
@@ -67,6 +65,10 @@ describe "IO#write on a file" do
       File.binread(@filename).should == "h\u0000\u0000\u0000i\u0000\u0000\u0000"
     end
 
+    it "uses an :open_args option" do
+      IO.write(@filename, 'hi', :open_args => ["w", nil, {:encoding => Encoding::UTF_32LE}]).should == 8
+    end
+
     it "raises a invalid byte sequence error if invalid bytes are being written" do
       File.open(@filename, "w", :encoding => Encoding::US_ASCII) do |file|
         lambda { file.write("\xFEhi") }.should raise_error(Encoding::InvalidByteSequenceError)
@@ -82,26 +84,46 @@ describe "IO#write on a file" do
   end
 end
 
-ruby_version_is "1.9.3" do
-  describe "IO.write" do
-    it_behaves_like :io_binwrite, :write
+describe "IO.write" do
+  it_behaves_like :io_binwrite, :write
 
-    it "uses an :open_args option" do
-      IO.write(@filename, 'hi', :open_args => ["w", nil, {:encoding => Encoding::UTF_32LE}]).should == 8
-    end
+  it "uses an :open_args option" do
+    IO.write(@filename, 'hi', :open_args => ["w", nil, {:encoding => Encoding::UTF_32LE}]).should == 8
+  end
 
-    it "disregards other options if :open_args is given" do
-      IO.write(@filename, 'hi', 2, :mode => "r", :encoding => Encoding::UTF_32LE, :open_args => ["w"]).should == 2
-      File.read(@filename).should == "\0\0hi"
-    end
+  it "disregards other options if :open_args is given" do
+    IO.write(@filename, 'hi', 2, :mode => "r", :encoding => Encoding::UTF_32LE, :open_args => ["w"]).should == 2
+    File.read(@filename).should == "\0\0hi"
+  end
 
-    it "uses the given encoding and returns the number of bytes written" do
-      IO.write(@filename, 'hi', :mode => "w", :encoding => Encoding::UTF_32LE).should == 8
-    end
+  it "uses the given encoding and returns the number of bytes written" do
+    IO.write(@filename, 'hi', :mode => "w", :encoding => Encoding::UTF_32LE).should == 8
+  end
 
-    it "writes binary data if no encoding is given" do
-      IO.write(@filename, 'Hëllö'.encode('ISO-8859-1'))
-      File.binread(@filename).should == "H\xEBll\xF6".force_encoding(Encoding::ASCII_8BIT)
+  it "writes binary data if no encoding is given" do
+    IO.write(@filename, 'Hëllö'.encode('ISO-8859-1'))
+    File.binread(@filename).should == "H\xEBll\xF6".force_encoding(Encoding::ASCII_8BIT)
+  end
+
+  platform_is_not :windows do
+    describe "on a FIFO" do
+      before :each do
+        @fifo = tmp("File_open_fifo")
+        system "mkfifo #{@fifo}"
+      end
+
+      after :each do
+        rm_r @fifo
+      end
+
+      it "writes correctly" do
+        thr = Thread.new do
+          sleep 0.5
+          IO.read(@fifo)
+        end
+        string = "hi"
+        IO.write(@fifo, string).should == string.length
+      end
     end
   end
 end

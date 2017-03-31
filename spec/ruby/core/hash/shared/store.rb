@@ -22,15 +22,15 @@ describe :hash_store, :shared => true do
     k1.should_receive(:hash).and_return(0)
     k2.should_receive(:hash).and_return(0)
 
-    h[k1] = 1
-    h[k2] = 2
+    h.send(@method, k1, 1)
+    h.send(@method, k2, 2)
     h.size.should == 2
   end
 
   it "accepts keys with private #hash method" do
     key = HashSpecs::KeyWithPrivateHash.new
     h = new_hash
-    h[key] = "foo"
+    h.send(@method, key, "foo")
     h[key].should == "foo"
   end
 
@@ -51,16 +51,8 @@ describe :hash_store, :shared => true do
     h.keys[0].should equal(key)
   end
 
-  ruby_version_is ""..."1.9" do
-    it "raises a TypeError if called on a frozen instance" do
-      lambda { HashSpecs.frozen_hash.send(@method, 1, 2) }.should raise_error(TypeError)
-    end
-  end
-
-  ruby_version_is "1.9" do
-    it "raises a RuntimeError if called on a frozen instance" do
-      lambda { HashSpecs.frozen_hash.send(@method, 1, 2) }.should raise_error(RuntimeError)
-    end
+  it "raises a RuntimeError if called on a frozen instance" do
+    lambda { HashSpecs.frozen_hash.send(@method, 1, 2) }.should raise_error(RuntimeError)
   end
 
   it "does not raise an exception if changing the value of an existing key during iteration" do

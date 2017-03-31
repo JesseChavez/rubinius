@@ -17,51 +17,59 @@ describe "Signal.trap" do
   end
 
   it "accepts a block in place of a proc/command argument" do
-    Signal.trap(:HUP) { ScratchPad.record :block_trap }
+    done = false
+
+    Signal.trap(:HUP) do
+      ScratchPad.record :block_trap
+      done = true
+    end
+
     Process.kill :HUP, Process.pid
-    sleep 0.5
+    Thread.pass until done
+
     ScratchPad.recorded.should == :block_trap
   end
 
-  ruby_version_is ""..."1.9" do
-    it "ignores the signal when passed nil" do
-      Signal.trap :HUP, nil
-      Signal.trap(:HUP, @saved_trap).should == "IGNORE"
+  it "is possible to create a new Thread when the handler runs" do
+    done = false
+
+    Signal.trap(:HUP) do
+      thr = Thread.new { }
+      thr.join
+      ScratchPad.record(thr.group == Thread.main.group)
+
+      done = true
     end
 
-    it "uses the command argument when passed both a command and block" do
-      Signal.trap(:HUP, @proc) { ScratchPad.record :block_trap }
-      Process.kill :HUP, Process.pid
-      sleep 0.5
-      ScratchPad.recorded.should == :proc_trap
-    end
+    Process.kill :HUP, Process.pid
+    Thread.pass until done
+
+    ScratchPad.recorded.should be_true
   end
 
-  ruby_version_is "1.9" do
-    it "ignores the signal when passed nil" do
-      Signal.trap :HUP, nil
-      Signal.trap(:HUP, @saved_trap).should be_nil
-    end
+  it "ignores the signal when passed nil" do
+    Signal.trap :HUP, nil
+    Signal.trap(:HUP, @saved_trap).should be_nil
+  end
 
-    it "accepts 'DEFAULT' as a symbol in place of a proc" do
-      Signal.trap :HUP, :DEFAULT
-      Signal.trap(:HUP, :DEFAULT).should == "DEFAULT"
-    end
+  it "accepts 'DEFAULT' as a symbol in place of a proc" do
+    Signal.trap :HUP, :DEFAULT
+    Signal.trap(:HUP, :DEFAULT).should == "DEFAULT"
+  end
 
-    it "accepts 'SIG_DFL' as a symbol in place of a proc" do
-      Signal.trap :HUP, :SIG_DFL
-      Signal.trap(:HUP, :SIG_DFL).should == "DEFAULT"
-    end
+  it "accepts 'SIG_DFL' as a symbol in place of a proc" do
+    Signal.trap :HUP, :SIG_DFL
+    Signal.trap(:HUP, :SIG_DFL).should == "DEFAULT"
+  end
 
-    it "accepts 'SIG_IGN' as a symbol in place of a proc" do
-      Signal.trap :HUP, :SIG_IGN
-      Signal.trap(:HUP, :SIG_IGN).should == "IGNORE"
-    end
+  it "accepts 'SIG_IGN' as a symbol in place of a proc" do
+    Signal.trap :HUP, :SIG_IGN
+    Signal.trap(:HUP, :SIG_IGN).should == "IGNORE"
+  end
 
-    it "accepts 'IGNORE' as a symbol in place of a proc" do
-      Signal.trap :HUP, :IGNORE
-      Signal.trap(:HUP, :IGNORE).should == "IGNORE"
-    end
+  it "accepts 'IGNORE' as a symbol in place of a proc" do
+    Signal.trap :HUP, :IGNORE
+    Signal.trap(:HUP, :IGNORE).should == "IGNORE"
   end
 
   it "accepts long names as Strings" do
@@ -120,7 +128,5 @@ describe "Signal.trap" do
       code = "trap(:EXIT, proc { print 1 }); trap(:EXIT, 'DEFAULT')"
       ruby_exe(code).should == ""
     end
-
   end
-
 end

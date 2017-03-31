@@ -25,33 +25,51 @@ describe "IO#puts" do
     lambda { $stdout.puts "\n" }.should output_to_fd("\n", STDOUT)
   end
 
-  ruby_version_is "" ... "1.9" do
-    it "writes nil with a newline when given nil as an arg" do
-      @io.should_receive(:write).with("nil")
-      @io.should_receive(:write).with("\n")
-      @io.puts(nil).should == nil
-    end
+  it "writes empty string with a newline when given nil as an arg" do
+    @io.should_receive(:write).with("")
+    @io.should_receive(:write).with("\n")
+    @io.puts(nil).should == nil
   end
 
-  ruby_version_is "1.9" do
-    it "writes empty string with a newline when given nil as an arg" do
-      @io.should_receive(:write).with("")
-      @io.should_receive(:write).with("\n")
-      @io.puts(nil).should == nil
-    end
-
-    it "writes empty string with a newline when when given nil as multiple args" do
-      @io.should_receive(:write).with("").twice
-      @io.should_receive(:write).with("\n").twice
-      @io.puts(nil, nil).should == nil
-    end
+  it "writes empty string with a newline when when given nil as multiple args" do
+    @io.should_receive(:write).with("").twice
+    @io.should_receive(:write).with("\n").twice
+    @io.puts(nil, nil).should == nil
   end
 
-  it "calls to_s before writing non-string objects" do
+  it "calls :to_ary before writing non-string objects, regardless of it being implemented in the receiver" do
+    object = mock('hola')
+    object.should_receive(:method_missing).with(:to_ary)
+    object.should_receive(:to_s).and_return("#<Object:0x...>")
+
+    @io.should_receive(:write).with("#<Object:0x...>")
+    @io.should_receive(:write).with("\n")
+    @io.puts(object).should == nil
+  end
+
+  it "calls :to_ary before writing non-string objects" do
+    object = mock('hola')
+    object.should_receive(:to_ary).and_return(["hola"])
+
+    @io.should_receive(:write).with("hola")
+    @io.should_receive(:write).with("\n")
+    @io.puts(object).should == nil
+  end
+
+  it "calls :to_s before writing non-string objects that don't respond to :to_ary" do
     object = mock('hola')
     object.should_receive(:to_s).and_return("hola")
 
     @io.should_receive(:write).with("hola")
+    @io.should_receive(:write).with("\n")
+    @io.puts(object).should == nil
+  end
+
+  it "returns general object info if :to_s does not return a string" do
+    object = mock('hola')
+    object.should_receive(:to_s).and_return(false)
+
+    @io.should_receive(:write).with(object.inspect.split(" ")[0] + ">")
     @io.should_receive(:write).with("\n")
     @io.puts(object).should == nil
   end

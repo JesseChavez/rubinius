@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 require 'rubygems/remote_fetcher'
 
 ##
@@ -56,14 +57,26 @@ module Gem::GemcutterUtilities
 
   ##
   # Creates an RubyGems API to +host+ and +path+ with the given HTTP +method+.
+  #
+  # If +allowed_push_host+ metadata is present, then it will only allow that host.
 
-  def rubygems_api_request(method, path, host = nil, &block)
+  def rubygems_api_request(method, path, host = nil, allowed_push_host = nil, &block)
     require 'net/http'
 
     self.host = host if host
     unless self.host
       alert_error "You must specify a gem server"
       terminate_interaction 1 # TODO: question this
+    end
+
+    if allowed_push_host
+      allowed_host_uri = URI.parse(allowed_push_host)
+      host_uri         = URI.parse(self.host)
+
+      unless (host_uri.scheme == allowed_host_uri.scheme) && (host_uri.host == allowed_host_uri.host)
+        alert_error "#{self.host.inspect} is not allowed by the gemspec, which only allows #{allowed_push_host.inspect}"
+        terminate_interaction 1
+      end
     end
 
     uri = URI.parse "#{self.host}/#{path}"
@@ -79,7 +92,7 @@ module Gem::GemcutterUtilities
 
   def sign_in sign_in_host = nil
     sign_in_host ||= self.host
-    return if Gem.configuration.rubygems_api_key
+    return if api_key
 
     pretty_host = if Gem::DEFAULT_HOST == sign_in_host then
                     'RubyGems.org'
@@ -102,7 +115,7 @@ module Gem::GemcutterUtilities
 
     with_response response do |resp|
       say "Signed in."
-      Gem.configuration.rubygems_api_key = resp.body
+      set_api_key host, resp.body
     end
   end
 
@@ -140,6 +153,14 @@ module Gem::GemcutterUtilities
 
       say message
       terminate_interaction 1 # TODO: question this
+    end
+  end
+
+  def set_api_key host, key
+    if host == Gem::DEFAULT_HOST
+      Gem.configuration.rubygems_api_key = key
+    else
+      Gem.configuration.set_api_key host, key
     end
   end
 

@@ -305,4 +305,60 @@ module Super
       end
     end
   end
+
+  class AnonymousModuleIncludedTwiceBase
+    def self.whatever
+      mod = Module.new do
+        def a(array)
+          array << "anon"
+          super
+        end
+      end
+
+      include mod
+    end
+
+    def a(array)
+      array << "non-anon"
+    end
+  end
+
+  class AnonymousModuleIncludedTwice < AnonymousModuleIncludedTwiceBase
+    whatever
+    whatever
+  end
+
+  module KeywordArguments
+    class A
+      def foo(**args)
+        args
+      end
+    end
+
+    class B < A
+      def foo(**)
+        super
+      end
+    end
+
+    class C < A
+      def foo(a:, b: 'b', **)
+        super
+      end
+    end
+  end
+
+  module SplatAndKeyword
+    class A
+      def foo(*args, **options)
+        [args, options]
+      end
+    end
+
+    class B < A
+      def foo(*args, **options)
+        super
+      end
+    end
+  end
 end

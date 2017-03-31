@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# frozen_string_literal: true
 #--
 # Copyright (C) 2004 Mauricio Julio Fernández Pradier
 # See LICENSE.txt for additional licensing information.
@@ -54,10 +55,12 @@ class Gem::Package
   class FormatError < Error
     attr_reader :path
 
-    def initialize message, path = nil
-      @path = path
+    def initialize message, source = nil
+      if source
+        @path = source.path
 
-      message << " in #{path}" if path
+        message = message + " in #{path}" if path
+      end
 
       super message
     end
@@ -79,6 +82,7 @@ class Gem::Package
   # Raised when a tar file is corrupt
 
   class TarInvalidError < Error; end
+
 
   attr_accessor :build_time # :nodoc:
 
@@ -114,19 +118,26 @@ class Gem::Package
   end
 
   ##
-  # Creates a new Gem::Package for the file at +gem+.
+  # Creates a new Gem::Package for the file at +gem+. +gem+ can also be
+  # provided as an IO object.
   #
   # If +gem+ is an existing file in the old format a Gem::Package::Old will be
   # returned.
 
-  def self.new gem
+  def self.new gem, security_policy = nil
+    gem = if gem.is_a?(Gem::Package::Source)
+            gem
+          elsif gem.respond_to? :read
+            Gem::Package::IOSource.new gem
+          else
+            Gem::Package::FileSource.new gem
+          end
+
     return super unless Gem::Package == self
-    return super unless File.exist? gem
+    return super unless gem.present?
 
-    start = File.read gem, 20
-
-    return super unless start
-    return super unless start.include? 'MD5SUM ='
+    return super unless gem.start
+    return super unless gem.start.include? 'MD5SUM ='
 
     Gem::Package::Old.new gem
   end
@@ -134,7 +145,7 @@ class Gem::Package
   ##
   # Creates a new package that will read or write to the file +gem+.
 
-  def initialize gem # :notnew:
+  def initialize gem, security_policy # :notnew:
     @gem = gem
 
     @build_time      = Time.now
@@ -142,10 +153,17 @@ class Gem::Package
     @contents        = nil
     @digests         = Hash.new { |h, algorithm| h[algorithm] = {} }
     @files           = nil
-    @security_policy = nil
+    @security_policy = security_policy
     @signatures      = {}
     @signer          = nil
     @spec            = nil
+  end
+
+  ##
+  # Copies this package to +path+ (if possible)
+
+  def copy_to path
+    FileUtils.cp @gem.path, path unless File.exist? path
   end
 
   ##
@@ -190,7 +208,13 @@ class Gem::Package
 
   def add_files tar # :nodoc:
     @spec.files.each do |file|
-      stat = File.stat file
+      stat = File.lstat file
+
+      if stat.symlink?
+        relative_dir = File.dirname(file).sub("#{Dir.pwd}/", '')
+        target_path = File.join(relative_dir, File.readlink(file))
+        tar.add_symlink file, target_path, stat.mode
+      end
 
       next unless stat.file?
 
@@ -227,7 +251,7 @@ class Gem::Package
 
     setup_signer
 
-    open @gem, 'wb' do |gem_io|
+    @gem.with_write_io do |gem_io|
       Gem::Package::TarWriter.new gem_io do |gem|
         add_metadata gem
         add_contents gem
@@ -255,7 +279,7 @@ EOM
 
     @contents = []
 
-    open @gem, 'rb' do |io|
+    @gem.with_read_io do |io|
       gem_tar = Gem::Package::TarReader.new io
 
       gem_tar.each do |entry|
@@ -312,7 +336,7 @@ EOM
 
     FileUtils.mkdir_p destination_dir
 
-    open @gem, 'rb' do |io|
+    @gem.with_read_io do |io|
       reader = Gem::Package::TarReader.new io
 
       reader.each do |entry|
@@ -345,13 +369,25 @@ EOM
 
         FileUtils.rm_rf destination
 
-        FileUtils.mkdir_p File.dirname destination
+        mkdir_options = {}
+        mkdir_options[:mode] = entry.header.mode if entry.directory?
+        mkdir =
+          if entry.directory? then
+            destination
+          else
+            File.dirname destination
+          end
 
-        open destination, 'wb', entry.header.mode do |out|
+        FileUtils.mkdir_p mkdir, mkdir_options
+
+        open destination, 'wb' do |out|
           out.write entry.read
-        end
+          FileUtils.chmod entry.header.mode, destination
+        end if entry.file?
 
-        say destination if Gem.configuration.really_verbose
+        File.symlink(entry.header.linkname, destination) if entry.symlink?
+
+        verbose destination
       end
     end
   end
@@ -481,7 +517,7 @@ EOM
     @files     = []
     @spec      = nil
 
-    open @gem, 'rb' do |io|
+    @gem.with_read_io do |io|
       Gem::Package::TarReader.new io do |reader|
         read_checksums reader
 
@@ -583,9 +619,11 @@ EOM
 end
 
 require 'rubygems/package/digest_io'
+require 'rubygems/package/source'
+require 'rubygems/package/file_source'
+require 'rubygems/package/io_source'
 require 'rubygems/package/old'
 require 'rubygems/package/tar_header'
 require 'rubygems/package/tar_reader'
 require 'rubygems/package/tar_reader/entry'
 require 'rubygems/package/tar_writer'
-

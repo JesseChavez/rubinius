@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 require 'rubygems/command'
 require 'rubygems/package'
 require 'rubygems/installer'
@@ -12,6 +13,7 @@ class Gem::Commands::PristineCommand < Gem::Command
           'Restores installed gems to pristine condition from files located in the gem cache',
           :version => Gem::Requirement.default,
           :extensions => true,
+          :extensions_set => false,
           :all => false
 
     add_option('--all',
@@ -20,10 +22,16 @@ class Gem::Commands::PristineCommand < Gem::Command
       options[:all] = value
     end
 
+    add_option('--skip=gem_name',
+               'used on --all, skip if name == gem_name') do |value, options|
+      options[:skip] = value
+    end
+
     add_option('--[no-]extensions',
                'Restore gems with extensions',
                'in addition to regular gems') do |value, options|
-      options[:extensions] = value
+      options[:extensions_set] = true
+      options[:extensions]     = value
     end
 
     add_option('--only-executables',
@@ -62,6 +70,9 @@ If the cached gem cannot be found it will be downloaded.
 
 If --no-extensions is provided pristine will not attempt to restore a gem
 with an extension.
+
+If --extensions is given (but not --all or gem names) only gems with
+extensions will be restored.
     EOF
   end
 
@@ -72,9 +83,17 @@ with an extension.
   def execute
     specs = if options[:all] then
               Gem::Specification.map
+
+            # `--extensions` must be explicitly given to pristine only gems
+            # with extensions.
+            elsif options[:extensions_set] and
+                  options[:extensions] and options[:args].empty? then
+              Gem::Specification.select do |spec|
+                spec.extensions and not spec.extensions.empty?
+              end
             else
-              get_all_gem_names.map do |gem_name|
-                Gem::Specification.find_all_by_name gem_name, options[:version]
+              get_all_gem_names.sort.map do |gem_name|
+                Gem::Specification.find_all_by_name(gem_name, options[:version]).reverse
               end.flatten
             end
 
@@ -96,6 +115,16 @@ with an extension.
         next
       end
 
+      if spec.name == options[:skip]
+        say "Skipped #{spec.full_name}, it was given through options"
+        next
+      end
+
+      if spec.bundled_gem_in_old_ruby?
+        say "Skipped #{spec.full_name}, it is bundled with old Ruby"
+        next
+      end
+
       unless spec.extensions.empty? or options[:extensions] then
         say "Skipped #{spec.full_name}, it needs to compile an extension"
         next
@@ -107,8 +136,17 @@ with an extension.
         require 'rubygems/remote_fetcher'
 
         say "Cached gem for #{spec.full_name} not found, attempting to fetch..."
+
         dep = Gem::Dependency.new spec.name, spec.version
-        Gem::RemoteFetcher.fetcher.download_to_cache dep
+        found, _ = Gem::SpecFetcher.fetcher.spec_for_dependency dep
+
+        if found.empty?
+          say "Skipped #{spec.full_name}, it was not found from cache and remote sources"
+          next
+        end
+
+        spec_candidate, source = found.first
+        Gem::RemoteFetcher.fetcher.download spec_candidate, source.uri.to_s, spec.base_dir
       end
 
       env_shebang =
@@ -119,7 +157,7 @@ with an extension.
           install_defaults.to_s['--env-shebang']
         end
 
-      installer = Gem::Installer.new(gem,
+      installer = Gem::Installer.at(gem,
                                      :wrappers => true,
                                      :force => true,
                                      :install_dir => spec.base_dir,

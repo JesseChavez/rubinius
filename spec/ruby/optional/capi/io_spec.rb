@@ -129,6 +129,16 @@ describe "C-API IO function" do
     end
   end
 
+  describe "rb_io_check_io" do
+    it "returns the IO object if it is valid" do
+      @o.rb_io_check_io(@io).should == @io
+    end
+
+    it "returns nil for non IO objects" do
+      @o.rb_io_check_io(new_hash).should be_nil
+    end
+  end
+
   describe "rb_io_check_closed" do
     it "does not raise an exception if the IO is not closed" do
       # The MRI function is void, so we use should_not raise_error
@@ -138,6 +148,20 @@ describe "C-API IO function" do
     it "raises an error if the IO is closed" do
       @io.close
       lambda { @o.rb_io_check_writable(@io) }.should raise_error(IOError)
+    end
+  end
+
+  # NOTE: unlike the name might suggest in MRI this function checks if an
+  # object is frozen, *not* if it's tainted.
+  describe "rb_io_taint_check" do
+    it "does not raise an exception if the IO is not frozen" do
+      lambda { @o.rb_io_taint_check(@io) }.should_not raise_error
+    end
+
+    it "raises an exception if the IO is frozen" do
+      @io.freeze
+
+      lambda { @o.rb_io_taint_check(@io) }.should raise_error(RuntimeError)
     end
   end
 
@@ -151,20 +175,15 @@ describe "C-API IO function" do
   end
 
   describe "rb_io_binmode" do
-
     it "returns self" do
       @o.rb_io_binmode(@io).should == @io
     end
 
-    ruby_version_is "1.9" do
-      it "sets binmode" do
-        @o.rb_io_binmode(@io)
-        @io.binmode?.should be_true
-      end
+    it "sets binmode" do
+      @o.rb_io_binmode(@io)
+      @io.binmode?.should be_true
     end
-
   end
-
 end
 
 describe "C-API IO function" do
@@ -277,29 +296,47 @@ describe "C-API IO function" do
 
 end
 
-ruby_version_is "2.0" do
-  describe "rb_fd_fix_cloexec" do
+describe "rb_fd_fix_cloexec" do
 
-    before :each do
-      @o = CApiIOSpecs.new
+  before :each do
+    @o = CApiIOSpecs.new
 
-      @name = tmp("c_api_rb_io_specs")
-      touch @name
+    @name = tmp("c_api_rb_io_specs")
+    touch @name
 
-      @io = new_io @name, fmode("w:utf-8")
-      @io.close_on_exec = false
-      @io.sync = true
-    end
+    @io = new_io @name, fmode("w:utf-8")
+    @io.close_on_exec = false
+    @io.sync = true
+  end
 
-    after :each do
-      @io.close unless @io.closed?
-      rm_r @name
-    end
+  after :each do
+    @io.close unless @io.closed?
+    rm_r @name
+  end
 
-    it "sets close_on_exec on the IO" do
-      @o.rb_fd_fix_cloexec(@io)
-      @io.close_on_exec?.should be_true
-    end
+  it "sets close_on_exec on the IO" do
+    @o.rb_fd_fix_cloexec(@io)
+    @io.close_on_exec?.should be_true
+  end
 
+end
+
+describe "rb_cloexec_open" do
+  before :each do
+    @o = CApiIOSpecs.new
+    @name = tmp("c_api_rb_io_specs")
+    touch @name
+
+    @io = nil
+  end
+
+  after :each do
+    @io.close unless @io.nil? || @io.closed?
+    rm_r @name
+  end
+
+  it "sets close_on_exec on the newly-opened IO" do
+    @io = @o.rb_cloexec_open(@name, 0, 0)
+    @io.close_on_exec?.should be_true
   end
 end

@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 require 'rubygems/command'
 require 'rubygems/local_remote_options'
 require 'rubygems/spec_fetcher'
@@ -17,7 +18,7 @@ class Gem::Commands::OutdatedCommand < Gem::Command
 
   def description # :nodoc:
     <<-EOF
-The outdated command lists gems you way wish to upgrade to a newer version.
+The outdated command lists gems you may wish to upgrade to a newer version.
 
 You can check for dependency mismatches using the dependency command and
 update the gems with the update or install commands.

@@ -16,18 +16,9 @@ describe "Kernel#frozen?" do
       @bignum = bignum_value
     end
 
-    ruby_version_is "" ... "2.0" do
-      it "returns false" do
-        @fixnum.frozen?.should be_false
-        @bignum.frozen?.should be_false
-      end
-    end
-
-    ruby_version_is "2.0" do
-      it "returns true" do
-        @fixnum.frozen?.should be_true
-        @bignum.frozen?.should be_true
-      end
+    it "returns true" do
+      @fixnum.frozen?.should be_true
+      @bignum.frozen?.should be_true
     end
   end
 
@@ -36,16 +27,8 @@ describe "Kernel#frozen?" do
       @float = 0.1
     end
 
-    ruby_version_is "" ... "2.0" do
-      it "returns false" do
-        @float.frozen?.should be_false
-      end
-    end
-
-    ruby_version_is "2.0" do
-      it "returns true" do
-        @float.frozen?.should be_true
-      end
+    it "returns true" do
+      @float.frozen?.should be_true
     end
   end
 
@@ -54,16 +37,26 @@ describe "Kernel#frozen?" do
       @symbol = :symbol
     end
 
-    ruby_version_is "" ... "2.1" do
-      it "returns false" do
-        @symbol.frozen?.should be_false
-      end
+    it "returns true" do
+      @symbol.frozen?.should be_true
     end
+  end
 
-    ruby_version_is "2.1" do
-      it "returns true" do
-        @symbol.frozen?.should be_true
-      end
+  describe "on nil" do
+    it "returns true" do
+      nil.frozen?.should be_true
+    end
+  end
+
+  describe "on true" do
+    it "returns true" do
+      true.frozen?.should be_true
+    end
+  end
+
+  describe "on false" do
+    it "returns true" do
+      false.frozen?.should be_true
     end
   end
 end

@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 require "rubygems/deprecate"
 
 ##
@@ -16,8 +17,8 @@ class Gem::Platform
   attr_accessor :version
 
   def self.local
-    arch = Gem::ConfigMap[:arch]
-    arch = "#{arch}_60" if arch =~ /mswin32$/
+    arch = RbConfig::CONFIG['arch']
+    arch = "#{arch}_60" if arch =~ /mswin(?:32|64)$/
     @local ||= new(arch)
   end
 
@@ -95,6 +96,7 @@ class Gem::Platform
                         [os, version]
                       when /netbsdelf/ then             [ 'netbsdelf', nil ]
                       when /openbsd(\d+\.\d+)?/ then    [ 'openbsd',   $1  ]
+                      when /bitrig(\d+\.\d+)?/ then     [ 'bitrig',    $1  ]
                       when /solaris(\d+\.\d+)?/ then    [ 'solaris',   $1  ]
                       # test
                       when /^(\w+_platform)(\d+)?/ then [ $1,          $2  ]
@@ -147,8 +149,8 @@ class Gem::Platform
     return nil unless Gem::Platform === other
 
     # cpu
-    (@cpu == 'universal' or other.cpu == 'universal' or @cpu == other.cpu or
-     (@cpu == 'arm' and other.cpu =~ /\Aarm/)) and
+    ([nil,'universal'].include?(@cpu) or [nil, 'universal'].include?(other.cpu) or @cpu == other.cpu or
+    (@cpu == 'arm' and other.cpu =~ /\Aarm/)) and
 
     # os
     @os == other.os and
@@ -173,6 +175,7 @@ class Gem::Platform
               when /^dalvik(\d+)?$/       then [nil,         'dalvik',  $1    ]
               when /dotnet(\-(\d+\.\d+))?/ then ['universal','dotnet',  $2    ]
               when /mswin32(\_(\d+))?/    then ['x86',       'mswin32', $2    ]
+              when /mswin64(\_(\d+))?/    then ['x64',       'mswin64', $2    ]
               when 'powerpc-darwin'       then ['powerpc',   'darwin',  nil   ]
               when /powerpc-darwin(\d)/   then ['powerpc',   'darwin',  $1    ]
               when /sparc-solaris2.8/     then ['sparc',     'solaris', '2.8' ]

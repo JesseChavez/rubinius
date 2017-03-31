@@ -36,21 +36,19 @@ describe :array_inspect, :shared => true do
     ["str".taint].send(@method).tainted?.should be_true
   end
 
-  ruby_version_is "1.9" do
-    it "untrusts the result if the Array is untrusted" do
-      [1, 2].untrust.send(@method).untrusted?.should be_true
-    end
-
-    it "does not untrust the result if the Array is untrusted but empty" do
-      [].untrust.send(@method).untrusted?.should be_false
-    end
-
-    it "untrusts the result if an element is untrusted" do
-      ["str".untrust].send(@method).untrusted?.should be_true
-    end
+  it "untrusts the result if the Array is untrusted" do
+    [1, 2].untrust.send(@method).untrusted?.should be_true
   end
 
-  ruby_version_is "1.9" do
+  it "does not untrust the result if the Array is untrusted but empty" do
+    [].untrust.send(@method).untrusted?.should be_false
+  end
+
+  it "untrusts the result if an element is untrusted" do
+    ["str".untrust].send(@method).untrusted?.should be_true
+  end
+
+  describe "with encoding" do
     before :each do
        @default_external_encoding = Encoding.default_external
     end
@@ -70,7 +68,7 @@ describe :array_inspect, :shared => true do
       jp   = "jp".encode("EUC-JP")
       array = [jp, utf8]
 
-      array.inspect.encoding.name.should == "UTF-8"
+      array.send(@method).encoding.name.should == "UTF-8"
     end
 
     it "use US-ASCII encoding if the default external encoding is not ascii compatible" do
@@ -80,17 +78,14 @@ describe :array_inspect, :shared => true do
       jp   = "jp".encode("EUC-JP")
       array = [jp, utf8]
 
-      array.inspect.encoding.name.should == "US-ASCII"
+      array.send(@method).encoding.name.should == "US-ASCII"
     end
 
-    ruby_version_is "2.0" do
-      it "raises if inspected result is not default external encoding" do
-        utf_16be = mock("utf_16be")
-        utf_16be.should_receive(:inspect).and_return("utf_16be".encode!(Encoding::UTF_16BE))
+    it "raises if inspected result is not default external encoding" do
+      utf_16be = mock("utf_16be")
+      utf_16be.should_receive(:inspect).and_return("utf_16be".encode!(Encoding::UTF_16BE))
 
-        lambda { [utf_16be].send(@method) }.should raise_error(Encoding::CompatibilityError)
-      end
+      lambda { [utf_16be].send(@method) }.should raise_error(Encoding::CompatibilityError)
     end
-
   end
 end

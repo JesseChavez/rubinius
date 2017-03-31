@@ -54,6 +54,12 @@ with_feature :encoding do
         str = "あ"
         str.encode(:invalid => :replace).should_not equal(str)
       end
+
+      it "normalizes newlines" do
+        "\r\nfoo".encode(:universal_newline => true).should == "\nfoo"
+
+        "\rfoo".encode(:universal_newline => true).should == "\nfoo"
+      end
     end
 
     describe "when passed to, from" do
@@ -116,6 +122,14 @@ with_feature :encoding do
         Encoding.default_internal = nil
         str = "abc"
         str.encode!.should equal(str)
+      end
+    end
+
+    describe "when passed options" do
+      it "returns self for ASCII-only String when Encoding.default_internal is nil" do
+        Encoding.default_internal = nil
+        str = "abc"
+        str.encode!(:invalid => :replace).should equal(str)
       end
     end
 

@@ -74,8 +74,8 @@ end
 def install_runtime(prefix, target)
   FileList[
     "#{prefix}/platform.conf",
-    "#{prefix}/**/index",
-    "#{prefix}/**/signature",
+    "#{prefix}/core/*",
+    "#{prefix}/signature",
     "#{prefix}/**/*.rb",
     "#{prefix}/**/*.rb{a,c}",
     "#{prefix}/**/*.{c,h}pp",
@@ -83,15 +83,14 @@ def install_runtime(prefix, target)
     "#{prefix}/**/*.c.*",
     "#{prefix}/**/*.ffi",
     "#{prefix}/**/*.#{$dlext}",
-    "#{prefix}/**/load_order*.txt"
   ].each do |name|
     install_file name, prefix, "#{target}#{BUILD_CONFIG[:runtimedir]}"
   end
 end
 
-def install_kernel(prefix, target)
+def install_core(prefix, target)
   FileList["#{prefix}/**/*.rb"].each do |name|
-    install_file name, prefix, "#{target}#{BUILD_CONFIG[:kerneldir]}"
+    install_file name, prefix, "#{target}#{BUILD_CONFIG[:coredir]}"
   end
 end
 
@@ -142,17 +141,26 @@ def install_manpages(prefix, target)
 end
 
 def install_gems(prefix, target)
-  FileList["#{prefix}/**/*.*", "#{prefix}/**/*"].each do |name|
+  list = FileList["#{prefix}/**/*.*", "#{prefix}/**/*"]
+  list.exclude("#{prefix}/bin/*")
+
+  list.each do |name|
     install_file name, prefix, "#{target}#{BUILD_CONFIG[:gemsdir]}"
+  end
+end
+
+def install_gems_bins(prefix, target)
+  FileList["#{prefix}/*"].each do |name|
+    install_file name, prefix, "#{target}#{BUILD_CONFIG[:gemsdir]}/bin", :mode => 0755
   end
 end
 
 namespace :stage do
   task :bin do
-    install_bin "#{BUILD_CONFIG[:sourcedir]}/vm/vm", BUILD_CONFIG[:sourcedir]
+    install_bin "#{BUILD_CONFIG[:sourcedir]}/machine/vm", BUILD_CONFIG[:sourcedir]
 
     if BUILD_CONFIG[:stagingdir]
-      install_bin "#{BUILD_CONFIG[:sourcedir]}/vm/vm", BUILD_CONFIG[:stagingdir]
+      install_bin "#{BUILD_CONFIG[:sourcedir]}/machine/vm", BUILD_CONFIG[:stagingdir]
 
       name = BUILD_CONFIG[:program_name]
       mode = File::CREAT | File::TRUNC | File::WRONLY
@@ -197,9 +205,9 @@ exec #{BUILD_CONFIG[:stagingdir]}#{BUILD_CONFIG[:bindir]}/$EXE "$@"
     end
   end
 
-  task :kernel do
+  task :core do
     if BUILD_CONFIG[:stagingdir]
-      install_kernel "#{BUILD_CONFIG[:sourcedir]}/kernel", BUILD_CONFIG[:stagingdir]
+      install_core "#{BUILD_CONFIG[:sourcedir]}/core", BUILD_CONFIG[:stagingdir]
     end
   end
 
@@ -211,7 +219,7 @@ exec #{BUILD_CONFIG[:stagingdir]}#{BUILD_CONFIG[:bindir]}/$EXE "$@"
 
   task :manpages do
     if BUILD_CONFIG[:stagingdir]
-      install_manpages "#{BUILD_CONFIG[:sourcedir]}/doc/generated/vm/man", BUILD_CONFIG[:stagingdir]
+      install_manpages "#{BUILD_CONFIG[:sourcedir]}/doc/generated/machine/man", BUILD_CONFIG[:stagingdir]
     end
   end
 end
@@ -229,7 +237,7 @@ Rubinius has been configured for the following paths:
 bin:     #{prefix}#{BUILD_CONFIG[:bindir]}
 lib:     #{prefix}#{BUILD_CONFIG[:libdir]}
 runtime: #{prefix}#{BUILD_CONFIG[:runtimedir]}
-kernel:  #{prefix}#{BUILD_CONFIG[:kerneldir]}
+core:    #{prefix}#{BUILD_CONFIG[:coredir]}
 site:    #{prefix}#{BUILD_CONFIG[:sitedir]}
 vendor:  #{prefix}#{BUILD_CONFIG[:vendordir]}
 man:     #{prefix}#{BUILD_CONFIG[:mandir]}
@@ -238,7 +246,7 @@ include: #{prefix}#{BUILD_CONFIG[:includedir]}
 
 Please ensure that the paths to these directories are writable
 by the current user. Otherwise, run 'rake install' with the
-oppropriate command to elevate permissions (eg su, sudo).
+appropriate command to elevate permissions (eg su, sudo).
         EOM
 
         exit(1)
@@ -252,7 +260,7 @@ oppropriate command to elevate permissions (eg su, sudo).
 
         install_runtime "#{stagingdir}#{BUILD_CONFIG[:runtimedir]}", prefixdir
 
-        install_kernel "#{stagingdir}#{BUILD_CONFIG[:kerneldir]}", prefixdir
+        install_core "#{stagingdir}#{BUILD_CONFIG[:coredir]}", prefixdir
 
         install_lib "#{stagingdir}#{BUILD_CONFIG[:libdir]}", prefixdir
 
@@ -270,6 +278,7 @@ oppropriate command to elevate permissions (eg su, sudo).
         install_extra_bins "#{stagingdir}/#{BUILD_CONFIG[:bindir]}", prefixdir
 
         install_gems "#{stagingdir}#{BUILD_CONFIG[:gemsdir]}", prefixdir
+        install_gems_bins "#{stagingdir}#{BUILD_CONFIG[:gemsdir]}/bin", prefixdir
 
         # Install the testrb command
         testrb = "#{prefixdir}#{BUILD_CONFIG[:bindir]}/testrb"
@@ -282,7 +291,7 @@ oppropriate command to elevate permissions (eg su, sudo).
     STDOUT.puts <<-EOM
 --------
 
-Successfully installed Rubinius #{BUILD_CONFIG[:version]}
+Successfully installed Rubinius #{release_revision.first}
 
 Add '#{BUILD_CONFIG[:prefixdir]}#{BUILD_CONFIG[:bindir]}' to your PATH. Available commands are:
 

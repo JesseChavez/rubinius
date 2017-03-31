@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 ##
 # Basic OpenSSL-based package signing class.
 
@@ -101,6 +102,8 @@ class Gem::Security::Signer
   def sign data
     return unless @key
 
+    raise Gem::Security::Exception, 'no certs provided' if @cert_chain.empty?
+
     if @cert_chain.length == 1 and @cert_chain.last.not_after < Time.now then
       re_sign_key
     end
@@ -122,7 +125,7 @@ class Gem::Security::Signer
   #   ~/.gem/gem-public_cert.pem.expired.%Y%m%d%H%M%S
   #
   # If the signing certificate can be re-signed the expired certificate will
-  # be saved as ~/.gem/gem-pubilc_cert.pem.expired.%Y%m%d%H%M%S where the
+  # be saved as ~/.gem/gem-public_cert.pem.expired.%Y%m%d%H%M%S where the
   # expiry time (not after) is used for the timestamp.
 
   def re_sign_key # :nodoc:

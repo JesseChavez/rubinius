@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 #--
 # Copyright 2006 by Chad Fowler, Rich Kilmer, Jim Weirich and others.
 # All rights reserved.
@@ -120,11 +121,11 @@ end
 # * HighSecurity - Here's the bugger that got us into this mess.
 #   The HighSecurity policy is identical to the MediumSecurity policy,
 #   except that it does not allow unsigned gems.  A malicious user
-#   doesn't have a whole lot of options here; he can't modify the
-#   package contents without invalidating the signature, and he can't
+#   doesn't have a whole lot of options here; they can't modify the
+#   package contents without invalidating the signature, and they can't
 #   modify or remove signature or the signing certificate chain, or
 #   RubyGems will simply refuse to install the package.  Oh well, maybe
-#   he'll have better luck causing problems for CPAN users instead :).
+#   they'll have better luck causing problems for CPAN users instead :).
 #
 # The reason RubyGems refused to install your shiny new signed gem was because
 # it was from an untrusted source.  Well, your code is infallible (naturally),
@@ -339,7 +340,7 @@ module Gem::Security
   # Digest algorithm used to sign gems
 
   DIGEST_ALGORITHM =
-    if defined?(OpenSSL::Digest) then
+    if defined?(OpenSSL::Digest::SHA1) then
       OpenSSL::Digest::SHA1
     end
 
@@ -355,7 +356,7 @@ module Gem::Security
   # Algorithm for creating the key pair used to sign gems
 
   KEY_ALGORITHM =
-    if defined?(OpenSSL::PKey) then
+    if defined?(OpenSSL::PKey::RSA) then
       OpenSSL::PKey::RSA
     end
 

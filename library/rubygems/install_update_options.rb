@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 #--
 # Copyright 2006 by Chad Fowler, Rich Kilmer, Jim Weirich and others.
 # All rights reserved.
@@ -57,6 +58,23 @@ module Gem::InstallUpdateOptions
                            when false then []
                            else            value
                            end
+    end
+
+    add_option(:"Install/Update", '--build-root DIR',
+               'Temporary installation root. Useful for building',
+               'packages. Do not use this when installing remote gems.') do |value, options|
+      options[:build_root] = File.expand_path(value)
+    end
+
+    add_option(:"Install/Update", '--vendor',
+               'Install gem into the vendor directory.',
+               'Only for use by gem repackagers.') do |value, options|
+      unless Gem.vendor_dir then
+        raise OptionParser::InvalidOption.new 'your platform is not supported'
+      end
+
+      options[:vendor] = true
+      options[:install_dir] = Gem.vendor_dir
     end
 
     add_option(:"Install/Update", '-N', '--no-document',
@@ -156,6 +174,58 @@ module Gem::InstallUpdateOptions
                 "meet version requirements") do |value, options|
       options[:minimal_deps] = true
     end
+
+    add_option(:"Install/Update", "--[no-]post-install-message",
+                "Print post install message") do |value, options|
+      options[:post_install_message] = value
+    end
+
+    add_option(:"Install/Update", '-g', '--file [FILE]',
+               'Read from a gem dependencies API file and',
+               'install the listed gems') do |v,o|
+      v = Gem::GEM_DEP_FILES.find do |file|
+        File.exist? file
+      end unless v
+
+      unless v then
+        message = v ? v : "(tried #{Gem::GEM_DEP_FILES.join ', '})"
+
+        raise OptionParser::InvalidArgument,
+                "cannot find gem dependencies file #{message}"
+      end
+
+      options[:gemdeps] = v
+    end
+
+    add_option(:"Install/Update", '--without GROUPS', Array,
+               'Omit the named groups (comma separated)',
+               'when installing from a gem dependencies',
+               'file') do |v,o|
+      options[:without_groups].concat v.map { |without| without.intern }
+    end
+
+    add_option(:"Install/Update", '--default',
+               'Add the gem\'s full specification to',
+               'specifications/default and extract only its bin') do |v,o|
+      options[:install_as_default] = v
+    end
+
+    add_option(:"Install/Update", '--explain',
+               'Rather than install the gems, indicate which would',
+               'be installed') do |v,o|
+      options[:explain] = v
+    end
+
+    add_option(:"Install/Update", '--[no-]lock',
+               'Create a lock file (when used with -g/--file)') do |v,o|
+      options[:lock] = v
+    end
+
+    add_option(:"Install/Update", '--[no-]suggestions',
+               'Suggest alternates when gems are not found') do |v,o|
+      options[:suggest_alternate] = v
+    end
+
   end
 
   ##

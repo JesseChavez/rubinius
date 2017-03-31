@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 require 'rubygems'
 require 'gauntlet'
 
@@ -16,7 +17,7 @@ require 'gauntlet'
 # rvsh-0.4.5           : No such file or directory - bin/rvsh
 # xen-0.1.2.1          : authors must be Array of Strings
 
-class GemGauntlet < Gauntlet
+class GemGauntlet < Gauntlet # :nodoc:
   def run(name)
     warn name
 

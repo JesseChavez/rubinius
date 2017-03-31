@@ -2,6 +2,20 @@ require File.expand_path('../../../spec_helper', __FILE__)
 require File.expand_path('../fixtures/classes', __FILE__)
 
 describe "Thread.new" do
+  it "accepts an optional keyword argument to set the Thread's stack size" do
+    size = 81920
+    t = Thread.new(stack_size: size) { }
+    t.stack_size.should == size
+  end
+
+  it "calls #to_int to covert the stack size to a Fixnum" do
+    size = mock("Thread stack size")
+    size.should_receive(:to_int).and_return(81920)
+
+    t = Thread.new(stack_size: size) { }
+    t.stack_size.should == 81920
+  end
+
   it "creates a thread executing the given block" do
     c = Channel.new
     Thread.new { c << true }.join
@@ -28,31 +42,15 @@ describe "Thread.new" do
     arr.should == [1]
   end
 
-  ruby_version_is ""..."1.9" do
-    it "doesn't call #initialize" do
-      c = Class.new(Thread) do
-        def initialize
-          raise
-        end
+  it "calls #initialize and raises an error if super not used" do
+    c = Class.new(Thread) do
+      def initialize
       end
-
-      lambda {
-        c.new
-      }.should_not raise_error(ThreadError)
     end
-  end
 
-  ruby_version_is "1.9" do
-    it "calls #initialize and raises an error if super not used" do
-      c = Class.new(Thread) do
-        def initialize
-        end
-      end
-
-      lambda {
-        c.new
-      }.should raise_error(ThreadError)
-    end
+    lambda {
+      c.new
+    }.should raise_error(ThreadError)
   end
 
   it "calls and respects #initialize for the block to use" do

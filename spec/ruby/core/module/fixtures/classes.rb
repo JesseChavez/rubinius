@@ -1,6 +1,12 @@
 module ModuleSpecs
   CONST = :plain_constant
 
+  module PrivConstModule
+    PRIVATE_CONSTANT = 1
+    private_constant :PRIVATE_CONSTANT
+    PUBLIC_CONSTANT = 2
+  end
+
   class Subclass < Module
   end
 
@@ -358,6 +364,22 @@ module ModuleSpecs
       rescue RuntimeError
         return :good
       end
+    end
+
+    module FromThread
+      module A
+        autoload :B, fixture(__FILE__, "autoload_empty.rb")
+
+        class B
+          autoload :C, fixture(__FILE__, "autoload_abc.rb")
+
+          def self.foo
+            C.foo
+          end
+        end
+      end
+
+      class D < A::B; end
     end
   end
 

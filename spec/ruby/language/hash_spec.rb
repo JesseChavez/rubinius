@@ -50,18 +50,65 @@ describe "Hash literal" do
     h.size.should == 2
     h.should == {:a => 1, :b => 2}
   end
-  
+
   it "recognizes '=' at the end of the key" do
     eval("{:a==>1}").should   == {:"a=" => 1}
     eval("{:a= =>1}").should  == {:"a=" => 1}
     eval("{:a= => 1}").should == {:"a=" => 1}
   end
-  
-  it "with '==>' in the middle raises SyntaxError" do
-    lambda {eval("{:a ==> 1}")}.should raise_error(SyntaxError)
-  end
-end
 
-ruby_version_is "1.9" do
-  require File.expand_path("../versions/hash_1.9", __FILE__)
+  it "with '==>' in the middle raises SyntaxError" do
+    lambda { eval("{:a ==> 1}") }.should raise_error(SyntaxError)
+  end
+
+  it "constructs a new hash with the given elements" do
+    {foo: 123}.should == {:foo => 123}
+    h = {:rbx => :cool, :specs => 'fail_sometimes'}
+    {rbx: :cool, specs: 'fail_sometimes'}.should == h
+  end
+
+  it "ignores a hanging comma" do
+    {foo: 123,}.should == {:foo => 123}
+    h = {:rbx => :cool, :specs => 'fail_sometimes'}
+    {rbx: :cool, specs: 'fail_sometimes',}.should == h
+  end
+
+  it "accepts mixed 'key: value', 'key => value' and '\"key\"': value' syntax" do
+    h = {:a => 1, :b => 2, "c" => 3, :d => 4}
+    eval('{a: 1, :b => 2, "c" => 3, "d": 4}').should == h
+  end
+
+  it "expands an '**{}' element into the containing Hash literal initialization" do
+    {a: 1, **{b: 2}, c: 3}.should == {a: 1, b: 2, c: 3}
+  end
+
+  it "expands an '**obj' element into the containing Hash literal initialization" do
+    h = {b: 2, c: 3}
+    {**h, a: 1}.should == {b: 2, c: 3, a: 1}
+    {a: 1, **h}.should == {a: 1, b: 2, c: 3}
+    {a: 1, **h, c: 4}.should == {a: 1, b: 2, c: 4}
+  end
+
+  it "calls #to_hash to convert an '**obj' element" do
+    obj = mock("hash splat")
+    obj.should_receive(:to_hash).and_return({a: 2, b: 3})
+
+    {a: 1, **obj, c: 3}.should == {a: 2, b: 3, c: 3}
+  end
+
+  it "raises a TypeError if #to_hash does not return a Hash" do
+    obj = mock("hash splat")
+    obj.should_receive(:to_hash).and_return(obj)
+
+    lambda { {**obj} }.should raise_error(TypeError)
+  end
+
+  it "expands an '**obj' element into the containing Hash and keeps the latter keys if there are duplicates" do
+    {a: 1, **{a: 2, b: 3, c: 4}, c: 3}.should == {a: 2, b: 3, c: 3}
+  end
+
+  it "merges multiple nested '**obj' in Hash literals" do
+    h = {a: 1, **{a: 2, **{b: 3, **{c: 4}}, **{d: 5}, }, **{d: 6}}
+    h.should == {a: 2, b: 3, c: 4, d: 6}
+  end
 end

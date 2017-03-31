@@ -50,8 +50,8 @@ static VALUE so_check_array_type(VALUE self, VALUE ary) {
 #endif
 
 #ifdef HAVE_RB_CHECK_CONVERT_TYPE
-static VALUE so_check_convert_type(VALUE self, VALUE obj) {
-  return rb_check_convert_type(obj, T_ARRAY, "Array", "to_ary");
+static VALUE so_check_convert_type(VALUE self, VALUE obj, VALUE klass, VALUE method) {
+  return rb_check_convert_type(obj, T_ARRAY, RSTRING_PTR(klass), RSTRING_PTR(method));
 }
 #endif
 
@@ -81,8 +81,8 @@ static VALUE so_rbclassof(VALUE self, VALUE obj) {
 #endif
 
 #ifdef HAVE_RB_CONVERT_TYPE
-static VALUE so_convert_type(VALUE self, VALUE obj) {
-  return rb_convert_type(obj, T_ARRAY, "Array", "to_ary");
+static VALUE so_convert_type(VALUE self, VALUE obj, VALUE klass, VALUE method) {
+  return rb_convert_type(obj, T_ARRAY, RSTRING_PTR(klass), RSTRING_PTR(method));
 }
 #endif
 
@@ -161,6 +161,12 @@ static VALUE so_instance_of(VALUE self, VALUE obj, VALUE klass) {
 #ifdef HAVE_RB_OBJ_IS_KIND_OF
 static VALUE so_kind_of(VALUE self, VALUE obj, VALUE klass) {
   return rb_obj_is_kind_of(obj, klass);
+}
+#endif
+
+#ifdef HAVE_RB_OBJ_METHOD_ARITY
+static VALUE object_specs_rb_obj_method_arity(VALUE self, VALUE obj, VALUE mid) {
+  return INT2FIX(rb_obj_method_arity(obj, SYM2ID(mid)));
 }
 #endif
 
@@ -427,7 +433,7 @@ void Init_object_spec() {
 #endif
 
 #ifdef HAVE_RB_CHECK_CONVERT_TYPE
-  rb_define_method(cls, "rb_check_convert_type", so_check_convert_type, 1);
+  rb_define_method(cls, "rb_check_convert_type", so_check_convert_type, 3);
 #endif
 
 #ifdef HAVE_RB_CHECK_TO_INTEGER
@@ -447,7 +453,7 @@ void Init_object_spec() {
 #endif
 
 #ifdef HAVE_RB_CONVERT_TYPE
-  rb_define_method(cls, "rb_convert_type", so_convert_type, 1);
+  rb_define_method(cls, "rb_convert_type", so_convert_type, 3);
 #endif
 
 #ifdef HAVE_RB_EXTEND_OBJECT
@@ -492,6 +498,10 @@ void Init_object_spec() {
 
 #ifdef HAVE_RB_OBJ_IS_KIND_OF
   rb_define_method(cls, "rb_obj_is_kind_of", so_kind_of, 2);
+#endif
+
+#ifdef HAVE_RB_OBJ_METHOD_ARITY
+  rb_define_method(cls, "rb_obj_method_arity", object_specs_rb_obj_method_arity, 2);
 #endif
 
 #ifdef HAVE_RB_OBJ_TAINT

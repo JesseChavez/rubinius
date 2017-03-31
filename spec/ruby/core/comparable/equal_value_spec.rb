@@ -32,60 +32,44 @@ describe "Comparable#==" do
     (@a == @b).should be_false
   end
 
-  ruby_version_is ""..."1.9" do
-    it "returns nil if calling #<=> on self returns nil" do
-      @a.should_receive(:<=>).any_number_of_times.and_return(nil)
-      (@a == @b).should be_nil
+  it "returns false if calling #<=> on self returns nil" do
+    @a.should_receive(:<=>).any_number_of_times.and_return(nil)
+    (@a == @b).should be_false
+  end
+
+  it "raises an ArgumentError if calling #<=> on self returns a non-Integer" do
+    @a.should_receive(:<=>).any_number_of_times.and_return("abc")
+    lambda { @a == @b }.should raise_error(ArgumentError)
+  end
+
+  context "when #<=> is not defined" do
+    before :each do
+      @a = ComparableSpecs::WithoutCompareDefined.new
+      @b = ComparableSpecs::WithoutCompareDefined.new
     end
 
-    it "returns nil if calling #<=> on self returns a non-Integer" do
-      @a.should_receive(:<=>).any_number_of_times.and_return("abc")
-      (@a == @b).should be_nil
+    it "returns true for identical objects" do
+      @a.should == @a
+    end
+
+    it "returns false and does not recurse infinitely" do
+      @a.should_not == @b
     end
   end
 
-  ruby_version_is "1.9" do
-    it "returns false if calling #<=> on self returns nil" do
-      @a.should_receive(:<=>).any_number_of_times.and_return(nil)
-      (@a == @b).should be_false
+  context "when #<=> calls super" do
+    before :each do
+      @a = ComparableSpecs::CompareCallingSuper.new
+      @b = ComparableSpecs::CompareCallingSuper.new
     end
 
-    it "returns false if calling #<=> on self returns a non-Integer" do
-      @a.should_receive(:<=>).any_number_of_times.and_return("abc")
-      (@a == @b).should be_false
-    end
-  end
-
-  describe "when calling #<=> on self raises an Exception" do
-    before(:all) do
-      @raise_standard_error = @a.dup
-      def @raise_standard_error.<=>(b) raise StandardError, "test"; end
-
-      @raise_sub_standard_error  = @a.dup
-      def @raise_sub_standard_error.<=>(b) raise TypeError, "test"; end
-
-      @not_standard_error = SyntaxError
-      @raise_not_standard_error  = @a.dup
-      def @raise_not_standard_error.<=>(b) raise SyntaxError, "test"; end
+    it "returns true for identical objects" do
+      @a.should == @a
     end
 
-    it "raises the error if #<=> raises an Exception that excluding StandardError" do
-      lambda { @raise_not_standard_error == @b }.should raise_error(@not_standard_error)
-    end
-
-    ruby_version_is ""..."1.9" do
-      it "returns nil if #<=> raises a StandardError" do
-        (@raise_standard_error == @b).should be_nil
-        (@raise_sub_standard_error == @b).should be_nil
-      end
-    end
-
-    ruby_version_is "1.9" do
-      # Behaviour confirmed by MRI test suite
-      it "returns false if #<=> raises a StandardError" do
-        (@raise_standard_error == @b).should be_false
-        (@raise_sub_standard_error == @b).should be_false
-      end
+    it "calls the defined #<=> only once for different objects" do
+      @a.should_not == @b
+      @a.calls.should == 1
     end
   end
 end

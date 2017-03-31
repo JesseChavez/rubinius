@@ -53,23 +53,6 @@ describe "CApiGlobalSpecs" do
     end
   end
 
-  ruby_version_is ""..."1.9" do
-    describe "rb_set_kcode" do
-      before :each do
-        @kcode = $KCODE
-      end
-
-      after :each do
-        $KCODE = @kcode
-      end
-
-      it "sets the value of $KCODE" do
-        @f.rb_set_kcode("U")
-        $KCODE.should == "UTF8"
-      end
-    end
-  end
-
   describe "rb_rs" do
     before :each do
       @dollar_slash = $/
@@ -86,6 +69,62 @@ describe "CApiGlobalSpecs" do
     it "returns the value of $/" do
       $/ = "foo"
       @f.rb_rs.should == "foo"
+    end
+  end
+
+  context "rb_std streams" do
+    before :each do
+      @name = tmp("rb_std_streams")
+      @stream = new_io @name
+    end
+
+    after :each do
+      @stream.close
+      rm_r @name
+    end
+
+    describe "rb_stdin" do
+      after :each do
+        $stdin = STDIN
+      end
+
+      it "returns $stdin" do
+        $stdin = @stream
+        @f.rb_stdin.should equal($stdin)
+      end
+    end
+
+    describe "rb_stdout" do
+      after :each do
+        $stdout = STDOUT
+      end
+
+      it "returns $stdout" do
+        $stdout = @stream
+        @f.rb_stdout.should equal($stdout)
+      end
+    end
+
+    describe "rb_stderr" do
+      after :each do
+        $stderr = STDERR
+      end
+
+      it "returns $stderr" do
+        $stderr = @stream
+        @f.rb_stderr.should equal($stderr)
+      end
+    end
+
+    describe "rb_defout" do
+      after :each do
+        $stdout = STDOUT
+      end
+
+      it "returns $stdout" do
+        $stdout = @stream
+        @f.rb_defout.should equal($stdout)
+      end
     end
   end
 

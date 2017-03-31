@@ -9,7 +9,7 @@ Daedalus.blueprint do |i|
   # -fno-omit-frame-pointer is needed to get a backtrace on FreeBSD.
   # It is enabled by default on OS X, on the other hand, not on Linux.
   # To use same build flags across platforms, it is added explicitly.
-  gcc.cflags << "-pipe -Wall -fno-omit-frame-pointer -g"
+  gcc.cflags << "-pipe -fPIC -fno-omit-frame-pointer -g"
 
   # Due to a Clang bug (http://llvm.org/bugs/show_bug.cgi?id=9825),
   # -mno-omit-leaf-frame-pointer is needed for Clang on Linux.
@@ -29,7 +29,7 @@ Daedalus.blueprint do |i|
   gcc.cxxflags << Rubinius::BUILD_CONFIG[:system_cxxflags]
   gcc.cxxflags << Rubinius::BUILD_CONFIG[:user_cxxflags]
 
-  if ENV['DEV']
+  if Rubinius::BUILD_CONFIG[:debug_build]
     gcc.cflags << "-O0"
     gcc.mtime_only = true
   else
@@ -40,16 +40,22 @@ Daedalus.blueprint do |i|
     gcc.mtime_only = true
   end
 
-  # This is necessary for the gcc sync prims to fully work
-  if Rubinius::BUILD_CONFIG[:x86_32]
-    gcc.cflags << "-march=i686"
-  end
-
   Rubinius::BUILD_CONFIG[:defines].each do |flag|
     gcc.cflags << "-D#{flag}"
   end
 
-  gcc.ldflags << "-lstdc++" << "-lm"
+  gcc.ldflags << "-lm"
+
+  if Rubinius::BUILD_CONFIG[:dtrace]
+    gcc.ldflags << "-lelf"
+    gcc.ldflags << "machine/dtrace/probes.o"
+
+    gcc.add_pre_link "rm -f machine/dtrace/probes.o"
+
+    blk = lambda { |files| files.select { |f| f =~ %r[machine/.*\.o$] } }
+    cmd = "dtrace -G -s machine/dtrace/probes.d -o machine/dtrace/probes.o %objects%"
+    gcc.add_pre_link(cmd, &blk)
+  end
 
   make = Rubinius::BUILD_CONFIG[:build_make]
 
@@ -62,17 +68,23 @@ Daedalus.blueprint do |i|
   gcc.ldflags << Rubinius::BUILD_CONFIG[:user_ldflags]
 
   # Files
-  subdirs = %w[ builtin capi util instruments gc llvm missing ].map do |x|
-    "vm/#{x}/*.{cpp,c}"
+  subdirs = %w[ class data capi util instruments instructions memory jit missing ].map do |x|
+    "machine/#{x}/**/*.{cpp,c}"
   end
 
-  files = i.source_files "vm/*.{cpp,c}", *subdirs
+  files = i.source_files "machine/*.{cpp,c}", *subdirs
+
+  Dir["machine/interpreter/*.cpp"].each do |name|
+    files << InstructionSourceFile.new(name)
+  end
 
   perl = Rubinius::BUILD_CONFIG[:build_perl] || "perl"
 
   src = Rubinius::BUILD_CONFIG[:sourcedir]
 
   # Libraries
+  gcc.cflags << "-I#{src}/vendor/rapidjson"
+
   ltm = i.external_lib "vendor/libtommath" do |l|
     l.cflags = ["-I#{src}/vendor/libtommath"] + gcc.cflags
     l.objects = [l.file("libtommath.a")]
@@ -87,7 +99,7 @@ Daedalus.blueprint do |i|
     g.depends_on "config.h", "configure"
 
     gcc.cflags.unshift "-I#{src}/vendor/oniguruma"
-    g.cflags = [ "-DHAVE_CONFIG_H", "-I#{src}/vm/include/capi" ]
+    g.cflags = [ "-DHAVE_CONFIG_H", "-I#{src}/machine/include/capi" ]
     g.cflags += gcc.cflags
 
     g.static_library "libonig" do |l|
@@ -137,19 +149,6 @@ Daedalus.blueprint do |i|
   gcc.add_library ffi
   files << ffi
 
-  udis = i.external_lib "vendor/udis86" do |l|
-    l.cflags = ["-I#{src}/vendor/udis86"] + gcc.cflags
-    l.objects = [l.file("libudis86/.libs/libudis86.a")]
-    l.to_build do |x|
-      unless File.exist?("Makefile") and File.exist?("libudis86/Makefile")
-        x.command "sh -c ./configure"
-      end
-      x.command make
-    end
-  end
-  gcc.add_library udis
-  files << udis
-
   if Rubinius::BUILD_CONFIG[:vendor_zlib]
     zlib = i.external_lib "vendor/zlib" do |l|
       l.cflags = ["-I#{src}/vendor/zlib"] + gcc.cflags
@@ -168,6 +167,24 @@ Daedalus.blueprint do |i|
     end
     gcc.add_library zlib
     files << zlib
+  else
+    gcc.ldflags << "-lz"
+  end
+
+  if Rubinius::BUILD_CONFIG[:vendor_libsodium]
+    sodium = i.external_lib "vendor/libsodium" do |l|
+      l.cflags = ["-I#{src}/vendor/libsodium/src/libsodium/include"] + gcc.cflags
+      l.objects = [l.file("src/libsodium/.libs/libsodium.a")]
+      l.to_build do |x|
+        unless File.exist?("Makefile")
+          x.command "sh -c ./configure"
+        end
+
+        x.command make
+      end
+    end
+    gcc.add_library sodium
+    files << sodium
   end
 
   if Rubinius::BUILD_CONFIG[:windows]
@@ -185,86 +202,92 @@ Daedalus.blueprint do |i|
     files << winp
   end
 
-  case Rubinius::BUILD_CONFIG[:llvm]
-  when :prebuilt, :svn
-    llvm = i.external_lib "vendor/llvm" do |l|
-      l.cflags = ["-I#{src}/vendor/llvm/include"] + gcc.cflags
-      l.objects = []
-    end
+  conf = Rubinius::BUILD_CONFIG[:llvm_configure]
 
-    gcc.add_library llvm
+  include_dir = `#{conf} --includedir`.chomp
+  gcc.cflags << "-I#{include_dir}"
+  gcc.cxxflags << Rubinius::BUILD_CONFIG[:llvm_cxxflags]
+
+  flags = `#{conf} --cflags`.strip.split(/\s+/)
+
+  flags.keep_if { |x| x =~ /^-[DI]/ }
+
+  flags.delete_if { |x| x.index("-O") == 0 }
+  flags.delete_if { |x| x =~ /-D__STDC/ }
+  flags.delete_if { |x| x == "-DNDEBUG" }
+  flags.delete_if { |x| x == "-fomit-frame-pointer" }
+  flags.delete_if { |x| x == "-pedantic" }
+  flags.delete_if { |x| x == "-W" }
+  flags.delete_if { |x| x == "-Wextra" }
+
+  # llvm-config may leak FORTIFY_SOURCE in the CFLAGS list on certain
+  # platforms. If this is the case then debug builds will fail. Sadly there's
+  # no strict guarantee on how LLVM formats this option, hence the Regexp.
+  #
+  # For example, on CentOS the option is added as -Wp,-D_FORTIFY_SOURCE=2.
+  # There's no strict guarantee that I know of that it will always be this
+  # exact format.
+  if Rubinius::BUILD_CONFIG[:debug_build]
+    flags.delete_if { |x| x =~ /_FORTIFY_SOURCE/ }
   end
 
-  case Rubinius::BUILD_CONFIG[:llvm]
-  when :config, :prebuilt, :svn
-    conf = Rubinius::BUILD_CONFIG[:llvm_configure]
-    flags = `#{conf} --cflags`.strip.split(/\s+/)
-    flags.delete_if { |x| x.index("-O") == 0 }
-    flags.delete_if { |x| x =~ /-D__STDC/ }
-    flags.delete_if { |x| x == "-DNDEBUG" }
-    flags.delete_if { |x| x == "-fomit-frame-pointer" }
-    flags.delete_if { |x| x == "-pedantic" }
-    flags.delete_if { |x| x == "-W" }
-    flags.delete_if { |x| x == "-Wextra" }
+  flags << "-DENABLE_LLVM"
 
-    flags << "-DENABLE_LLVM"
+  ldflags = Rubinius::BUILD_CONFIG[:llvm_ldflags]
 
-    ldflags = `#{conf} --ldflags`.strip.split(/\s+/)
-
-    if Rubinius::BUILD_CONFIG[:llvm_shared]
-      objects = ["-lLLVM-#{Rubinius::BUILD_CONFIG[:llvm_version]}"]
-    else
-      objects = `#{conf} --libfiles`.strip.split(/\s+/)
-    end
-
-    if Rubinius::BUILD_CONFIG[:windows]
-      ldflags = ldflags.sub(%r[-L/([a-zA-Z])/], '-L\1:/')
-
-      objects.select do |f|
-        f.sub!(%r[^/([a-zA-Z])/], '\1:/')
-        File.file? f
-      end
-    end
-
-    gcc.cflags.concat flags
-    gcc.ldflags.concat objects
-    gcc.ldflags.concat ldflags
-  when :no
-    # nothing, not using LLVM
+  if Rubinius::BUILD_CONFIG[:llvm_shared_objs]
+    objects = Rubinius::BUILD_CONFIG[:llvm_shared_objs]
   else
-    STDERR.puts "Unsupported LLVM configuration: #{Rubinius::BUILD_CONFIG[:llvm]}"
-    raise "get out"
+    objects = `#{conf} --libs`.strip.split(/\s+/)
   end
 
-  # Make sure to push these up front so vm/ stuff has priority
-  dirs = %w[ /vm /vm/include /vm/builtin ]
-  gcc.cflags.unshift "#{dirs.map { |d| "-I#{src}#{d}" }.join(" ")} -I. -Ivm/test/cxxtest"
+  if Rubinius::BUILD_CONFIG[:windows]
+    ldflags = ldflags.sub(%r[-L/([a-zA-Z])/], '-L\1:/')
 
-  gcc.cflags << "-Wno-unused-function"
+    objects.select do |f|
+      f.sub!(%r[^/([a-zA-Z])/], '\1:/')
+      File.file? f
+    end
+  end
+
+  gcc.cflags.concat flags
+  gcc.ldflags.concat objects
+
+  gcc.ldflags << ldflags
+
+  # Make sure to push these up front so machine/ stuff has priority
+  dirs = %w[ /machine /machine/include ]
+  gcc.cflags.unshift "#{dirs.map { |d| "-I#{src}#{d}" }.join(" ")} -I. -Imachine/test/cxxtest"
+
+  gcc.cflags << "-Wall"
   gcc.cflags << "-Werror"
-  gcc.cflags << "-DRBX_PROFILER"
+  gcc.cflags << "-Wno-unused-function"
+  gcc.cflags << "-Wno-unused-parameter"
+  gcc.cflags << "-Wwrite-strings"
+  gcc.cflags << "-Wmissing-field-initializers"
+  gcc.cflags << "-Wcovered-switch-default"
   gcc.cflags << "-D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS"
   gcc.cflags << "-D_LARGEFILE_SOURCE"
   gcc.cflags << "-D_FILE_OFFSET_BITS=64"
 
   cli = files.dup
-  cli << i.source_file("vm/drivers/cli.cpp")
+  cli << i.source_file("machine/drivers/cli.cpp")
 
-  exe = RUBY_PLATFORM =~ /mingw|mswin/ ? 'vm/vm.exe' : 'vm/vm'
+  exe = RUBY_PLATFORM =~ /mingw|mswin/ ? 'machine/vm.exe' : 'machine/vm'
   i.program exe, *cli
 
   test_files = files.dup
-  test_files << i.source_file("vm/test/runner.cpp") { |f|
-    tests = Dir["vm/test/**/test_*.hpp"].sort
+  test_files << i.source_file("machine/test/runner.cpp") { |f|
+    tests = Dir["machine/test/**/test_*.hpp"].sort
 
     f.depends_on tests
 
     f.autogenerate do |x|
-      x.command("#{perl} vm/test/cxxtest/cxxtestgen.pl --error-printer --have-eh " +
-        "--abort-on-fail -include=vm/test/test_setup.h -o vm/test/runner.cpp " +
+      x.command("#{perl} machine/test/cxxtest/cxxtestgen.pl --error-printer --have-eh " +
+        "--abort-on-fail -include=machine/test/test_setup.h -o machine/test/runner.cpp " +
         tests.join(' '))
     end
   }
 
-  i.program "vm/test/runner", *test_files
+  i.program "machine/test/runner", *test_files
 end

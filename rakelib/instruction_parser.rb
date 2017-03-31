@@ -38,8 +38,8 @@
 # the 'receiver' and 'count' additional items.
 #
 # Finally, for instructions that alter the normal sequential flow of execution,
-# the type of control flow change will be specified in curly braces, e.g.
-# {branch}. The control flow behavior defaults to next, but for those
+# the type of control flow change will be specified with a hashrocket e.g.
+# '=> branch'. The control flow behavior defaults to next, but for those
 # instructions where control is (or may) change, one of the following flow
 # types must be specified:
 #   branch - for instructions that branch within the same method
@@ -81,6 +81,19 @@ class InstructionParser
         @file.puts "      def #{method_name}(arg1)"
       when 2
         @file.puts "      def #{method_name}(arg1, arg2)"
+      when 3
+        @file.puts "      def #{method_name}(arg1, arg2, arg3)"
+      end
+    end
+
+    # Emit find_literal for literal methods.
+    def method_find_literal
+      @opcode.arguments.each_with_index do |arg, index|
+        if arg == "literal"
+          @file.puts "        arg#{index+1} = find_literal(arg#{index+1})"
+        elsif arg == "count"
+          @file.puts "        arg#{index+1} = Integer(arg#{index+1})"
+        end
       end
     end
 
@@ -93,6 +106,8 @@ class InstructionParser
         @file.puts "        @stream << #{@opcode.bytecode} << arg1"
       when 2
         @file.puts "        @stream << #{@opcode.bytecode} << arg1 << arg2"
+      when 3
+        @file.puts "        @stream << #{@opcode.bytecode} << arg1 << arg2 << arg3"
       end
       @file.puts "        @ip += #{@opcode.arguments.size + 1}"
     end
@@ -130,25 +145,13 @@ class InstructionParser
     def method_definition
       method_signature
       @before_stream.call if @before_stream
+      method_find_literal
       method_append_stream
       @after_stream.call if @after_stream
       @before_stack.call if @before_stack
       method_stack_effect
       @after_stack.call if @after_stack
       method_close
-    end
-
-    def literal_method
-      @before_stream = lambda { @file.puts "        arg1 = find_literal arg1" }
-      method_definition
-    end
-
-    def literal_count_method
-      @before_stream = lambda do
-        @file.puts "        arg1 = find_literal arg1"
-        @file.puts "        arg2 = Integer(arg2)"
-      end
-      method_definition
     end
 
     def method_missing(sym, *args)
@@ -202,6 +205,22 @@ class InstructionParser
 
     # Specific instruction methods
 
+    def process_push_literal
+      @method_name = :emit_push_literal
+      method_signature
+      method_append_stream
+      method_stack_effect
+      method_close
+    end
+
+    def process_create_block
+      method_signature
+      @file.puts "        arg1 = add_generator(arg1)"
+      method_append_stream
+      method_stack_effect
+      method_close
+    end
+
     def process_goto
       unconditional_branch
     end
@@ -211,6 +230,30 @@ class InstructionParser
     end
 
     def process_goto_if_true
+      conditional_branch
+    end
+
+    def process_goto_if_nil
+      conditional_branch
+    end
+
+    def process_goto_if_not_nil
+      conditional_branch
+    end
+
+    def process_goto_if_undefined
+      conditional_branch
+    end
+
+    def process_goto_if_not_undefined
+      conditional_branch
+    end
+
+    def process_goto_if_equal
+      conditional_branch
+    end
+
+    def process_goto_if_not_equal
       conditional_branch
     end
 
@@ -242,92 +285,6 @@ class InstructionParser
       unconditional_exit
     end
 
-    def process_push_int
-      method_signature
-
-      # Integers greater than 256 are stored in the literals tuple.
-      @file.puts <<EOM
-        if arg1 > 2 and arg1 < 256
-          @stream << #{@opcode.bytecode} << arg1
-          @current_block.add_stack(0, 1)
-          @ip += 2
-          @instruction = #{@opcode.bytecode}
-        else
-          case arg1
-          when -1
-            meta_push_neg_1
-          when 0
-            meta_push_0
-          when 1
-            meta_push_1
-          when 2
-            meta_push_2
-          else
-            push_literal arg1
-          end
-        end
-      end
-
-EOM
-    end
-
-    def process_push_literal
-      @method_name = :emit_push_literal
-      method_definition
-    end
-
-    def process_dup_top
-      method_definition
-    end
-
-    def process_swap_stack
-      method_definition
-    end
-
-    def process_push_const
-      # unused right now
-    end
-
-    def process_find_const
-      literal_method
-    end
-
-    def process_push_ivar
-      literal_method
-    end
-
-    def process_set_ivar
-      literal_method
-    end
-
-    def process_check_serial
-      literal_count_method
-    end
-
-    def process_check_serial_private
-      literal_count_method
-    end
-
-    def process_create_block
-      @before_stream = lambda do
-        @file.puts "        arg1 = add_literal arg1"
-        @file.puts "        @generators << arg1"
-      end
-      method_definition
-    end
-
-    def process_invoke_primitive
-      literal_count_method
-    end
-
-    def process_call_custom
-      literal_count_method
-    end
-
-    def process_zsuper
-      literal_method
-    end
-
     def process_cast_array
       method_signature
       make_array = @parser.find_opcode "make_array"
@@ -342,6 +299,8 @@ EOM
   class ParseError < Exception; end
 
   class Definition
+    attr_accessor :bytecode
+
     def opcode_definition(file)
     end
 
@@ -349,6 +308,7 @@ EOM
     end
 
     def opcode_name
+      ""
     end
 
     def opcode_width
@@ -532,17 +492,18 @@ EOM
   end
 
   class Instruction < Definition
-    attr_reader :name, :bytecode, :arguments, :consumed, :extra,
-                :produced, :produced_extra, :effect, :body, :control_flow,
-                :produced_times
+    attr_reader :name, :arguments, :consumed, :extra, :produced,
+                :produced_extra, :effect, :body, :control_flow, :produced_times
+    attr_accessor :bytecode
+
+    @bytecodes = 0
 
     def self.bytecodes
       @bytecodes
     end
 
-    def self.bytecode
-      @bytecodes ||= -1
-      @bytecodes += 1
+    def self.bytecodes=(total)
+      @bytecodes = total
     end
 
     def initialize(parser, header, doc)
@@ -553,7 +514,7 @@ EOM
       @doc = InstructionDocumentation.new(self).parse(doc)
       @extra = nil
       @produced_extra = nil
-      @bytecode = self.class.bytecode
+      @bytecode = 0
       @control_flow = :next
     end
 
@@ -691,6 +652,16 @@ EOM
       end
     end
 
+    def instruction_implementation(file)
+      @arguments.each do |arg|
+        file.puts "  intptr_t #{arg} = next_int;"
+      end
+
+      @body.each do |line|
+        file.puts line.rstrip
+      end
+    end
+
     def opcode_visitor
       "HANDLE_INST#{@arguments.size}(#{@bytecode}, #{@name});"
     end
@@ -783,6 +754,13 @@ EOM
       end
     end
 
+    # Assign Instruction bytecode index
+    total_opcodes = 0
+    objects.sort! { |a, b| a.opcode_name <=> b.opcode_name }
+      .select { |x| x.kind_of? Instruction }
+      .each.with_index { |x, i| total_opcodes = x.bytecode = i }
+    Instruction.bytecodes = total_opcodes + 1
+
     @parsed = true
   end
 
@@ -799,7 +777,8 @@ EOM
       file.puts "module Rubinius"
       file.puts "  class InstructionSet"
 
-      objects.each { |obj| obj.opcode_definition file }
+      objects.select { |obj| obj.kind_of? Instruction or obj.kind_of? Define }
+        .each { |obj| obj.opcode_definition file }
 
       file.puts "  end"
       file.puts "end"
@@ -810,7 +789,7 @@ EOM
     File.open filename, "wb" do |file|
       file.puts "# *** This file is generated by InstructionParser ***"
       file.puts
-      file.puts "module Rubinius"
+      file.puts "module CodeTools"
       file.puts "  module GeneratorMethods"
 
       objects.each { |obj| obj.opcode_method self, file }
@@ -828,7 +807,8 @@ EOM
       offset = 0
       offsets = []
       objects.each do |obj|
-        if name = obj.opcode_name
+        name = obj.opcode_name
+        unless name.empty?
           file.puts "   \"#{name}\\0\""
           offsets << offset
           offset += name.size + 1
@@ -876,6 +856,120 @@ EOM
       end
 
       file.puts "} // extern \"C\""
+    end
+  end
+
+  def generate_interpreter_tests(filename)
+    insns = objects.select { |x| x.kind_of? Instruction }
+    File.open filename, "wb" do |file|
+      file.puts <<-EOD
+\#include "machine/test/test.hpp"
+
+\#include "call_frame.hpp"
+\#include "object_utils.hpp"
+
+\#include "interpreter.hpp"
+
+class TestInterpreter : public CxxTest::TestSuite, public VMTest {
+public:
+
+  void setUp() {
+    create();
+  }
+
+  void tearDown() {
+    destroy();
+  }
+      EOD
+
+      insns.each do |obj|
+        file.puts <<-EOD
+
+  void test_interpreter_#{obj.name}() {
+    CallFrame* call_frame = ALLOCA_CALL_FRAME(1);
+    StackVariables* scope = ALLOCA_STACKVARIABLES(0);
+    setup_call_frame(call_frame, scope, 1);
+
+    intptr_t opcodes[#{obj.arguments.size+2}];
+    opcodes[0] =
+      reinterpret_cast<intptr_t>(instructions::data_#{obj.name}.interpreter_address);#{obj.arguments.map.with_index { |x, i| "\n    opcodes[#{i+1}] = 0; // #{x}" }.join}
+    opcodes[#{obj.arguments.size+1}] =
+      reinterpret_cast<intptr_t>(instructions::data_ret.interpreter_address);
+
+    // TODO: instructions
+    // interpreter::#{obj.name}(state, call_frame, opcodes);
+
+    TS_ASSERT(true);
+    // TS_ASSERT_EQUALS(call_frame->ip(), instructions::data_#{obj.name}.width);
+  }
+        EOD
+      end
+
+      file.puts "};"
+    end
+  end
+
+  def generate_instruction_data(filename)
+    File.open filename, "wb" do |file|
+      file.puts '#ifndef RBX_INSTRUCTIONS_DATA_HPP'
+      file.puts '#define RBX_INSTRUCTIONS_DATA_HPP'
+      file.puts ""
+      file.puts "namespace rubinius {"
+      file.puts "  namespace instructions {"
+      file.puts <<-EOD
+    struct InstructionData {
+      const char* name;
+      const int id;
+      const int width;
+      const int read;
+      const int read_arg0;
+      const int read_arg1;
+      const int read_arg2;
+      const int write;
+      const int write_arg0;
+      const int write_arg1;
+      const int write_arg2;
+      intptr_t (*interpreter_address)(STATE, CallFrame*, intptr_t const[]);
+
+      int consumed(intptr_t arg0, intptr_t arg1, intptr_t arg2) const {
+        return read + (arg0*read_arg0) + (arg1*read_arg1) + (arg2*read_arg2);
+      }
+
+      int produced(intptr_t arg0, intptr_t arg1, intptr_t arg2) const {
+        return write + (arg0*write_arg0) + (arg1*write_arg1) + (arg2*write_arg2);
+      }
+
+      int stack_effect(intptr_t arg0, intptr_t arg1, intptr_t arg2) const {
+        return produced(arg0, arg1, arg2) - consumed(arg0, arg1, arg2);
+      }
+    };
+
+      EOD
+
+      objects.select { |x| x.kind_of? Instruction }.each do |obj|
+        file.puts "    const InstructionData constexpr data_#{obj.name} = {"
+        file.puts %[      #{obj.name.inspect}, #{obj.bytecode}, #{obj.opcode_width}, #{obj.static_read_effect}, #{obj.extra == 0 ? 1 : 0}, #{obj.extra == 1 ? 1 : 0}, #{obj.extra == 2 ? 1 : 0}, #{obj.static_write_effect}, (#{obj.produced_extra == 0 ? 1 : 0} * #{obj.produced_times || 0}), (#{obj.produced_extra == 1 ? 1 : 0} * #{obj.produced_times || 0}), (#{obj.produced_extra == 2 ? 1 : 0} * #{obj.produced_extra || 0}),\n      rubinius::interpreter::#{obj.name}]
+        file.puts "    };"
+      end
+
+      file.puts "  }"
+      file.puts "}"
+      file.puts ""
+      file.puts '#endif'
+    end
+  end
+
+  def generate_instruction_data_array(filename)
+    File.open filename, "wb" do |file|
+      file.puts "namespace rubinius {"
+      file.puts "  const instructions::InstructionData Interpreter::instruction_data[] = {"
+
+      objects.each do |obj|
+        file.puts "    rubinius::instructions::data_#{obj.name},"
+      end
+
+      file.puts "  };"
+      file.puts "}"
     end
   end
 
@@ -948,6 +1042,7 @@ EOM
       file.puts "static inline int stack_difference(opcode op,"
       file.puts "                                   opcode operand1 = 0,"
       file.puts "                                   opcode operand2 = 0,"
+      file.puts "                                   opcode operand3 = 0,"
       file.puts "                                   int* read_effect = 0, int* write_effect = 0)"
       file.puts "{"
       file.puts "  switch(op) {"

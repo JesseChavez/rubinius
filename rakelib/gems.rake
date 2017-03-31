@@ -1,40 +1,44 @@
-def bootstrap_rubinius(cmd)
-  ENV["RBX_BOOTSTRAP_LOAD_PATH"] = "1"
-  sh cmd
+def bootstrap_rubinius(cmd, options=nil)
+  gems_path = File.expand_path "../", BUILD_CONFIG[:bootstrap_gems_dir]
+  ENV["RBX_GEMS_PATH"] = gems_path
+  ENV["RBX_PREFIX_PATH"] = BUILD_CONFIG[:build_prefix]
+  sh "#{BUILD_CONFIG[:build_exe]} #{cmd} #{options}"
 ensure
-  ENV.delete "RBX_BOOTSTRAP_LOAD_PATH"
+  ENV.delete "RBX_GEMS_PATH"
+  ENV.delete "RBX_PREFIX_PATH"
 end
 
 namespace :gems do
   desc 'Install the pre-installed gems'
   task :install do
-    ENV['GEM_HOME'] = ENV['GEM_PATH'] = nil
-    cmd = "#{BUILD_CONFIG[:build_exe]} #{BUILD_CONFIG[:sourcedir]}/rakelib/preinstall_gems.rb"
+    clean_environment
 
-    Dir.chdir "vendor/cache" do
+    cmd = "#{BUILD_CONFIG[:sourcedir]}/rakelib/preinstall_gems.rb"
+
+    Dir.chdir BUILD_CONFIG[:gems_cache] do
       bootstrap_rubinius cmd
     end
   end
 
   task :melbourne do
     prefix = "#{BUILD_CONFIG[:build_prefix]}#{BUILD_CONFIG[:runtimedir]}"
-    path = Dir["#{prefix}/gems/rubinius-melbourne-*/ext/rubinius/melbourne"].first
+    path = Dir["#{prefix}/gems/rubinius-melbourne-*/ext/rubinius/code/melbourne"].first
     Dir.chdir path do
       begin
         ENV["RBX_RUN_COMPILED"] = "1"
-        ENV["RBX_PREFIX_PATH"] = BUILD_CONFIG[:build_prefix]
-        sh "#{BUILD_CONFIG[:build_exe]} ./extconf.rbc"
+        bootstrap_rubinius "./extconf.rbc"
         sh "#{BUILD_CONFIG[:build_make]} && #{BUILD_CONFIG[:build_make]} install"
       ensure
         ENV.delete "RBX_RUN_COMPILED"
-        ENV.delete "RBX_PREFIX_PATH"
       end
     end
   end
 
   task :extensions do
-    gems_dir = "#{BUILD_CONFIG[:build_prefix]}#{BUILD_CONFIG[:runtimedir]}/gems"
-    build_gem_extconf = "#{BUILD_CONFIG[:build_exe]} extconf.rb"
+    clean_environment
+
+    gems_dir = BUILD_CONFIG[:bootstrap_gems_dir]
+    build_gem_extconf = "extconf.rb"
 
     # Build the gems needed to run mkmf.rb
     names = FileList["#{gems_dir}/rubysl-{etc,fcntl}*/**/extconf.rb"]
@@ -61,7 +65,13 @@ namespace :gems do
       Dir.chdir File.dirname(name) do
         puts "Building #{m[1]}..."
 
-        bootstrap_rubinius build_gem_extconf unless File.exist? "Makefile"
+        if m[1] =~ /openssl/ and openssl = ENV["OPENSSL_DIR"]
+          options = "--with-cppflags=-I#{openssl}/include --with-ldflags=-L#{openssl}/lib"
+        else
+          options = nil
+        end
+
+        bootstrap_rubinius build_gem_extconf, options unless File.exist? "Makefile"
         sh "#{BUILD_CONFIG[:build_make]}", :verbose => $verbose
 
         if File.exist? ext_name

@@ -34,6 +34,32 @@ describe "IO#write_nonblock on a file" do
   end
 end
 
+describe 'IO#write_nonblock' do
+  before do
+    @read, @write = IO.pipe
+  end
+
+  after do
+    @read.close
+    @write.close
+  end
+
+  context "when the operation would block" do
+    context "when exception option is not passed" do
+      it "raises IO::EAGAINWaitWritable" do
+        lambda { loop { @write.write_nonblock("a" * 10_000) } }.should raise_error(IO::EAGAINWaitWritable)
+      end
+    end
+
+    context "when exception option is set to false" do
+      it "returns :wait_writable" do
+        loop { break if @write.write_nonblock("a" * 10_000, exception: false) == :wait_writable }
+        1.should == 1
+      end
+    end
+  end
+end
+
 describe "IO#write_nonblock" do
   it_behaves_like :io_write, :write_nonblock
 end

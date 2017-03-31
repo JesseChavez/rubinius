@@ -229,19 +229,19 @@ describe :process_spawn, :shared => true do
       end.should output_to_fd(Process.getpgid(Process.pid).to_s)
     end
 
-    it "joins the current process if :pgroup => false" do
+    it "joins the current process if :pgroup is false" do
       lambda do
         Process.wait @object.spawn(ruby_cmd("print Process.getpgid(Process.pid)"), :pgroup => false)
       end.should output_to_fd(Process.getpgid(Process.pid).to_s)
     end
 
-    it "joins the current process if :pgroup => nil" do
+    it "joins the current process if :pgroup is nil" do
       lambda do
         Process.wait @object.spawn(ruby_cmd("print Process.getpgid(Process.pid)"), :pgroup => nil)
       end.should output_to_fd(Process.getpgid(Process.pid).to_s)
     end
 
-    it "joins a new process group if :pgroup => true" do
+    it "joins a new process group if :pgroup is true" do
       process = lambda do
         Process.wait @object.spawn(ruby_cmd("print Process.getpgid(Process.pid)"), :pgroup => true)
       end
@@ -250,7 +250,7 @@ describe :process_spawn, :shared => true do
       process.should output_to_fd(/\d+/)
     end
 
-    it "joins a new process group if :pgroup => 0" do
+    it "joins a new process group if :pgroup is 0" do
       process = lambda do
         Process.wait @object.spawn(ruby_cmd("print Process.getpgid(Process.pid)"), :pgroup => 0)
       end
@@ -259,7 +259,7 @@ describe :process_spawn, :shared => true do
       process.should output_to_fd(/\d+/)
     end
 
-    it "joins the specified process group if :pgroup => pgid" do
+    it "joins the specified process group if :pgroup is pgid" do
       lambda do
         Process.wait @object.spawn(ruby_cmd("print Process.getpgid(Process.pid)"), :pgroup => 123)
       end.should_not output_to_fd("123")
@@ -334,7 +334,7 @@ describe :process_spawn, :shared => true do
 
   # redirection
 
-  it "redirects STDOUT to the given file descriptior if :out => Fixnum" do
+  it "redirects STDOUT to the given file descriptior if :out is Fixnum" do
     File.open(@name, 'w') do |file|
       lambda do
         Process.wait @object.spawn(ruby_cmd("print :glark"), :out => file.fileno)
@@ -342,7 +342,7 @@ describe :process_spawn, :shared => true do
     end
   end
 
-  it "redirects STDOUT to the given file if :out => IO" do
+  it "redirects STDOUT to the given file if :out is IO" do
     File.open(@name, 'w') do |file|
       lambda do
         Process.wait @object.spawn(ruby_cmd("print :glark"), :out => file)
@@ -350,12 +350,12 @@ describe :process_spawn, :shared => true do
     end
   end
 
-  it "redirects STDOUT to the given file if :out => String" do
+  it "redirects STDOUT to the given file if :out is String" do
     Process.wait @object.spawn(ruby_cmd("print :glark"), :out => @name)
     @name.should have_data("glark")
   end
 
-  it "redirects STDERR to the given file descriptior if :err => Fixnum" do
+  it "redirects STDERR to the given file descriptior if :err is Fixnum" do
     File.open(@name, 'w') do |file|
       lambda do
         Process.wait @object.spawn(ruby_cmd("STDERR.print :glark"), :err => file.fileno)
@@ -363,7 +363,7 @@ describe :process_spawn, :shared => true do
     end
   end
 
-  it "redirects STDERR to the given file descriptor if :err => IO" do
+  it "redirects STDERR to the given file descriptor if :err is IO" do
     File.open(@name, 'w') do |file|
       lambda do
         Process.wait @object.spawn(ruby_cmd("STDERR.print :glark"), :err => file)
@@ -371,9 +371,17 @@ describe :process_spawn, :shared => true do
     end
   end
 
-  it "redirects STDERR to the given file if :err => String" do
+  it "redirects STDERR to the given file if :err is String" do
     Process.wait @object.spawn(ruby_cmd("STDERR.print :glark"), :err => @name)
     @name.should have_data("glark")
+  end
+
+  it "redirects STDERR to child STDOUT if :err is [:child, :out]" do
+    File.open(@name, 'w') do |file|
+      lambda do
+        Process.wait @object.spawn(ruby_cmd("STDERR.print :glark"), :out => file, :err => [:child, :out])
+      end.should output_to_fd("glark", file)
+    end
   end
 
   it "redirects both STDERR and STDOUT to the given file descriptior" do
@@ -402,41 +410,21 @@ describe :process_spawn, :shared => true do
     @name.should have_data("")
   end
 
-  # :close_others
-
-  it "closes file descriptors >= 3 in the child process" do
-    IO.pipe do |r, w|
-      begin
-        pid = @object.spawn(ruby_cmd(""))
-        w.close
-        lambda { r.read_nonblock(1) }.should raise_error(EOFError)
-      ensure
-        Process.kill(:TERM, pid)
-        Process.wait(pid)
-      end
+  context "when passed :close_others is true" do
+    before :each do
+      @output = tmp("spawn_close_others_true")
+      @options = { :close_others => true }
+      @command = %[Process.wait spawn("#{RUBY_EXE}", "-e", "%s", #{@options.inspect})]
     end
-  end
 
-  ruby_version_is ""..."2.0" do
-    it "does not close file descriptors >= 3 in the child process when given a false :close_others option" do
+    after :each do
+      rm_r @output
+    end
+
+    it "closes file descriptors >= 3 in the child process" do
       IO.pipe do |r, w|
         begin
-          pid = @object.spawn(ruby_cmd(""), :close_others => false)
-          w.close
-          lambda { r.read_nonblock(1) }.should raise_error(Errno::EAGAIN)
-        ensure
-          Process.kill(:TERM, pid)
-          Process.wait(pid)
-        end
-      end
-    end
-  end
-
-  ruby_version_is "2.0" do
-    it "closes file descriptors >= 3 in the child process even if given a false :close_others option because they are set close_on_exec" do
-      IO.pipe do |r, w|
-        begin
-          pid = @object.spawn(ruby_cmd(""), :close_others => false)
+          pid = @object.spawn(ruby_cmd(""), @options)
           w.close
           lambda { r.read_nonblock(1) }.should raise_error(EOFError)
         ensure
@@ -445,20 +433,81 @@ describe :process_spawn, :shared => true do
         end
       end
     end
+
+    it "does not close STDIN" do
+      cmd = @command % ["STDOUT.puts STDIN.read(0).inspect"]
+      ruby_exe(cmd, :args => "> #{@output}")
+      @output.should have_data(%[""\n])
+    end
+
+    it "does not close STDOUT" do
+      cmd = @command % ["STDOUT.puts 'hello'"]
+      ruby_exe(cmd, :args => "> #{@output}")
+      @output.should have_data("hello\n")
+    end
+
+    it "does not close STDERR" do
+      cmd = @command % ["STDERR.puts 'hello'"]
+      ruby_exe(cmd, :args => "2> #{@output}")
+      @output.should have_data("hello\n")
+    end
   end
 
-  it "does not close file descriptors >= 3 in the child process when given a false :close_others option and fds are set close_on_exec=false" do
-    IO.pipe do |r, w|
-      r.close_on_exec = false
-      w.close_on_exec = false
-      begin
-        pid = @object.spawn(ruby_cmd(""), :close_others => false)
-        w.close
-        lambda { r.read_nonblock(1) }.should raise_error(Errno::EAGAIN)
-      ensure
-        Process.kill(:TERM, pid)
-        Process.wait(pid)
+  context "when passed :close_others is false" do
+    before :each do
+      @output = tmp("spawn_close_others_false")
+      @options = { :close_others => false }
+      @command = %[Process.wait spawn("#{RUBY_EXE}", "-e", "%s", #{@options.inspect})]
+    end
+
+    after :each do
+      rm_r @output
+    end
+
+    it "closes file descriptors >= 3 in the child process because they are set close_on_exec by default" do
+      IO.pipe do |r, w|
+        begin
+          pid = @object.spawn(ruby_cmd(""), @options)
+          w.close
+          lambda { r.read_nonblock(1) }.should raise_error(EOFError)
+        ensure
+          Process.kill(:TERM, pid)
+          Process.wait(pid)
+        end
       end
+    end
+
+    it "does not close file descriptors >= 3 in the child process if fds are set close_on_exec=false" do
+      IO.pipe do |r, w|
+        r.close_on_exec = false
+        w.close_on_exec = false
+        begin
+          pid = @object.spawn(ruby_cmd(""), @options)
+          w.close
+          lambda { r.read_nonblock(1) }.should raise_error(Errno::EAGAIN)
+        ensure
+          Process.kill(:TERM, pid)
+          Process.wait(pid)
+        end
+      end
+    end
+
+    it "does not close STDIN" do
+      cmd = @command % ["STDOUT.puts STDIN.read(0).inspect"]
+      ruby_exe(cmd, :args => "> #{@output}")
+      @output.should have_data(%[""\n])
+    end
+
+    it "does not close STDOUT" do
+      cmd = @command % ["STDOUT.puts 'hello'"]
+      ruby_exe(cmd, :args => "> #{@output}")
+      @output.should have_data("hello\n")
+    end
+
+    it "does not close STDERR" do
+      cmd = @command % ["STDERR.puts 'hello'"]
+      ruby_exe(cmd, :args => "2> #{@output}")
+      @output.should have_data("hello\n")
     end
   end
 
@@ -480,22 +529,8 @@ describe :process_spawn, :shared => true do
     lambda { @object.spawn "" }.should raise_error(Errno::ENOENT)
   end
 
-  describe "when the command does not exist" do
-    before do
-      @code = lambda { @object.spawn "nonesuch" }
-    end
-
-    it "raises an Errno::ENOENT" do
-      lambda { @code.call }.should raise_error(Errno::ENOENT)
-    end
-
-    it "sets $? to a Process::Status with the pid of the failed fork and exit code 127" do
-      begin; @code.call; rescue Errno::ENOENT; end
-
-      $?.should be_kind_of(Process::Status)
-      $?.pid.should be_kind_of(Fixnum)
-      $?.exitstatus.should == 127
-    end
+  it "raises an Errno::ENOENT if the command does not exist" do
+    lambda { @object.spawn "nonesuch" }.should raise_error(Errno::ENOENT)
   end
 
   it "raises an Errno::EACCES when the file does not have execute permissions" do
@@ -512,5 +547,28 @@ describe :process_spawn, :shared => true do
 
   it "raises an ArgumentError when passed an unknown option key" do
     lambda { @object.spawn("echo", :nonesuch => :foo) }.should raise_error(ArgumentError)
+  end
+
+  describe "with Integer option keys" do
+    before :each do
+      @name = tmp("spawn_fd_map.txt")
+      @io = new_io @name, "w+"
+      @io.sync = true
+    end
+
+    after :each do
+      @io.close unless @io.closed?
+      rm_r @name
+    end
+
+    it "maps the key to a file descriptor in the child that inherits the file descriptor from the parent specified by the value" do
+      child_fd = @io.fileno + 1
+      args = [RUBY_EXE, fixture(__FILE__, "map_fd.rb"), child_fd.to_s]
+      pid = @object.spawn *args, { child_fd => @io }
+      Process.waitpid pid
+      @io.rewind
+
+      @io.read.should == "writing to fd: #{child_fd}"
+    end
   end
 end

@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 require 'rubygems/command'
 require 'rubygems/local_remote_options'
 require 'rubygems/spec_fetcher'
@@ -49,6 +50,12 @@ class Gem::Commands::QueryCommand < Gem::Command
       options[:all] = value
     end
 
+    add_option('-e', '--exact',
+               'Name of gem(s) to query on matches the',
+               'provided STRING') do |value, options|
+      options[:exact] = value
+    end
+
     add_option(      '--[no-]prerelease',
                'Display prerelease versions') do |value, options|
       options[:prerelease] = value
@@ -72,16 +79,27 @@ is too hard to use.
 
   def execute
     exit_code = 0
+    if options[:args].to_a.empty? and options[:name].source.empty?
+      name = options[:name]
+      no_name = true
+    elsif !options[:name].source.empty?
+      name = Array(options[:name])
+    else
+      args = options[:args].to_a
+      name = options[:exact] ? args : args.map{|arg| /#{arg}/i }
+    end
 
-    name = options[:name]
     prerelease = options[:prerelease]
 
     unless options[:installed].nil? then
-      if name.source.empty? then
+      if no_name then
         alert_error "You must specify a gem name"
         exit_code |= 4
+      elsif name.count > 1
+        alert_error "You must specify only ONE gem!"
+        exit_code |= 4
       else
-        installed = installed? name, options[:version]
+        installed = installed? name.first, options[:version]
         installed = !installed unless options[:installed]
 
         if installed then
@@ -95,6 +113,22 @@ is too hard to use.
       terminate_interaction exit_code
     end
 
+    names = Array(name)
+    names.each { |n| show_gems n, prerelease }
+  end
+
+  private
+
+  def display_header type
+    if (ui.outs.tty? and Gem.configuration.verbose) or both? then
+      say
+      say "*** #{type} GEMS ***"
+      say
+    end
+  end
+
+  #Guts of original execute
+  def show_gems name, prerelease
     req = Gem::Requirement.default
     # TODO: deprecate for real
     dep = Gem::Deprecate.skip_during { Gem::Dependency.new name, req }
@@ -105,11 +139,7 @@ is too hard to use.
         alert_warning "prereleases are always shown locally"
       end
 
-      if ui.outs.tty? or both? then
-        say
-        say "*** LOCAL GEMS ***"
-        say
-      end
+      display_header 'LOCAL'
 
       specs = Gem::Specification.find_all { |s|
         s.name =~ name and req =~ s.version
@@ -123,11 +153,7 @@ is too hard to use.
     end
 
     if remote? then
-      if ui.outs.tty? or both? then
-        say
-        say "*** REMOTE GEMS ***"
-        say
-      end
+      display_header 'REMOTE'
 
       fetcher = Gem::SpecFetcher.fetcher
 
@@ -143,19 +169,17 @@ is too hard to use.
                :latest
              end
 
-      if options[:name].source.empty?
+      if name.respond_to?(:source) && name.source.empty?
         spec_tuples = fetcher.detect(type) { true }
       else
         spec_tuples = fetcher.detect(type) do |name_tuple|
-          options[:name] === name_tuple.name
+          name === name_tuple.name
         end
       end
 
       output_query_results spec_tuples
     end
   end
-
-  private
 
   ##
   # Check if gem +name+ version +version+ is installed.
@@ -211,7 +235,7 @@ is too hard to use.
 
     name_tuple, spec = detail_tuple
 
-    spec = spec.fetch_spec name_tuple unless Gem::Specification === spec
+    spec = spec.fetch_spec name_tuple if spec.respond_to? :fetch_spec
 
     entry << "\n"
 
@@ -223,7 +247,7 @@ is too hard to use.
     spec_summary     entry, spec
   end
 
-  def entry_versions entry, name_tuples, platforms
+  def entry_versions entry, name_tuples, platforms, specs
     return unless options[:versions]
 
     list =
@@ -232,7 +256,16 @@ is too hard to use.
       else
         platforms.sort.reverse.map do |version, pls|
           if pls == [Gem::Platform::RUBY] then
-            version
+            if options[:domain] == :remote || specs.all? { |spec| spec.is_a? Gem::Source }
+              version
+            else
+              spec = specs.select { |s| s.version == version }
+              if spec.first.default_gem?
+                "default: #{version}"
+              else
+                version
+              end
+            end
           else
             ruby = pls.delete Gem::Platform::RUBY
             platform_list = [ruby, *pls.sort].compact
@@ -253,14 +286,14 @@ is too hard to use.
 
     entry = [name_tuples.first.name]
 
-    entry_versions entry, name_tuples, platforms
+    entry_versions entry, name_tuples, platforms, specs
     entry_details  entry, detail_tuple, specs, platforms
 
     entry.join
   end
 
   def spec_authors entry, spec
-    authors = "Author#{spec.authors.length > 1 ? 's' : ''}: "
+    authors = "Author#{spec.authors.length > 1 ? 's' : ''}: ".dup
     authors << spec.authors.join(', ')
     entry << format_text(authors, 68, 4)
   end
@@ -274,7 +307,7 @@ is too hard to use.
   def spec_license entry, spec
     return if spec.license.nil? or spec.license.empty?
 
-    licenses = "License#{spec.licenses.length > 1 ? 's' : ''}: "
+    licenses = "License#{spec.licenses.length > 1 ? 's' : ''}: ".dup
     licenses << spec.licenses.join(', ')
     entry << "\n" << format_text(licenses, 68, 4)
   end
@@ -324,4 +357,3 @@ is too hard to use.
   end
 
 end
-

@@ -13,6 +13,12 @@ class CApiObjectSpecs
       @arguments   = args
     end
   end
+
+  class SubArray < ::Array
+    def to_array
+      self
+    end
+  end
 end
 
 describe "CApiObject" do
@@ -42,6 +48,15 @@ describe "CApiObject" do
 
   class DescObjectTest < ObjectTest
   end
+
+	class MethodArity
+	  def one;    end
+	  def two(a); end
+	  def three(*a);  end
+	  def four(a, b); end
+	  def five(a, b, *c);    end
+	  def six(a, b, *c, &d); end
+	end
 
   describe "rb_obj_alloc" do
     it "allocates a new uninitialized object" do
@@ -106,6 +121,36 @@ describe "CApiObject" do
     end
   end
 
+  describe "rb_obj_method_arity" do
+    before :each do
+      @obj = MethodArity.new
+    end
+
+    it "returns 0 when the method takes no arguments" do
+	    @o.rb_obj_method_arity(@obj, :one).should == 0
+    end
+
+    it "returns 1 when the method takes a single, required argument" do
+	    @o.rb_obj_method_arity(@obj, :two).should == 1
+    end
+
+    it "returns -1 when the method takes a variable number of arguments" do
+	    @o.rb_obj_method_arity(@obj, :three).should == -1
+    end
+
+    it "returns 2 when the method takes two required arguments" do
+	    @o.rb_obj_method_arity(@obj, :four).should == 2
+    end
+
+    it "returns -N-1 when the method takes N required and variable additional arguments" do
+	    @o.rb_obj_method_arity(@obj, :five).should == -3
+    end
+
+    it "returns -N-1 when the method takes N required, variable additional, and a block argument" do
+	    @o.rb_obj_method_arity(@obj, :six).should == -3
+    end
+  end
+
   describe "rb_method_boundp" do
     it "returns true when the given method is bound" do
       @o.rb_method_boundp(Object, :class, true).should == true
@@ -144,30 +189,75 @@ describe "CApiObject" do
   end
 
   describe "rb_obj_instance_variables" do
-    ruby_version_is "1.9" do
-      it "returns an array with instance variable names as symbols" do
-        o = ObjectTest.new
-        @o.rb_obj_instance_variables(o).should include(:@foo)
-      end
-    end
-
-    ruby_version_is ""..."1.9" do
-      it "returns an array with instance variable names as strings" do
-        o = ObjectTest.new
-        @o.rb_obj_instance_variables(o).should include("@foo")
-      end
+    it "returns an array with instance variable names as symbols" do
+      o = ObjectTest.new
+      @o.rb_obj_instance_variables(o).should include(:@foo)
     end
   end
 
   describe "rb_check_convert_type" do
-    it "tries to coerce to a type, otherwise returns nil" do
-      ac = AryChild.new
-      ao = Array.new
-      h = Hash.new
-      # note that I force the ary information in the spec extension
-      @o.rb_check_convert_type(ac).should == []
-      @o.rb_check_convert_type(ao).should == []
-      @o.rb_check_convert_type(h).should == nil
+    it "returns the passed object and does not call the converting method if the object is the specified type" do
+      ary = [1, 2]
+      ary.should_not_receive(:to_ary)
+
+      @o.rb_check_convert_type(ary, "Array", "to_ary").should equal(ary)
+    end
+
+    it "returns the passed object and does not call the converting method if the object is a subclass of the specified type" do
+      obj = CApiObjectSpecs::SubArray.new
+      obj.should_not_receive(:to_array)
+
+      @o.rb_check_convert_type(obj, "Array", "to_array").should equal(obj)
+    end
+
+    it "returns nil if the converting method returns nil" do
+      obj = mock("rb_check_convert_type")
+      obj.should_receive(:to_array).and_return(nil)
+
+      @o.rb_check_convert_type(obj, "Array", "to_array").should be_nil
+    end
+
+    it "raises a TypeError if the converting method returns an object that is not the specified type" do
+      obj = mock("rb_check_convert_type")
+      obj.should_receive(:to_array).and_return("string")
+
+      lambda do
+        @o.rb_check_convert_type(obj, "Array", "to_array")
+      end.should raise_error(TypeError)
+    end
+  end
+
+  describe "rb_convert_type" do
+    it "returns the passed object and does not call the converting method if the object is the specified type" do
+      ary = [1, 2]
+      ary.should_not_receive(:to_ary)
+
+      @o.rb_convert_type(ary, "Array", "to_ary").should equal(ary)
+    end
+
+    it "returns the passed object and does not call the converting method if the object is a subclass of the specified type" do
+      obj = CApiObjectSpecs::SubArray.new
+      obj.should_not_receive(:to_array)
+
+      @o.rb_convert_type(obj, "Array", "to_array").should equal(obj)
+    end
+
+    it "raises a TypeError if the converting method returns nil" do
+      obj = mock("rb_convert_type")
+      obj.should_receive(:to_array).and_return(nil)
+
+      lambda do
+        @o.rb_convert_type(obj, "Array", "to_array")
+      end.should raise_error(TypeError)
+    end
+
+    it "raises a TypeError if the converting method returns an object that is not the specified type" do
+      obj = mock("rb_convert_type")
+      obj.should_receive(:to_array).and_return("string")
+
+      lambda do
+        @o.rb_convert_type(obj, "Array", "to_array")
+      end.should raise_error(TypeError)
     end
   end
 
@@ -267,32 +357,41 @@ describe "CApiObject" do
     end
   end
 
-  ruby_version_is "1.8.7" do
-    describe "rb_check_to_integer" do
-      it "tries to coerce to an integer, otherwise returns nil" do
-        x = mock("to_int")
-        x.should_receive(:to_int).and_return(5)
-        y = mock("fake_to_int")
-        y.should_receive(:to_int).and_return("Hello")
-
-        @o.rb_check_to_integer(5, "non_existing").should == 5
-        @o.rb_check_to_integer(5, "to_int").should == 5
-        @o.rb_check_to_integer(x, "to_int").should == 5
-        @o.rb_check_to_integer(y, "to_int").should == nil
-        @o.rb_check_to_integer("Hello", "to_int").should == nil
-      end
+  describe "rb_check_to_integer" do
+    it "returns the object when passed a Fixnum" do
+      @o.rb_check_to_integer(5, "to_int").should equal(5)
     end
-  end
 
-  describe "rb_convert_type" do
-    it "tries to coerce to a type, otherwise raises a TypeError" do
-      ac = AryChild.new
-      ao = Array.new
-      h = Hash.new
-      # note that the ary information is forced in the spec extension
-      @o.rb_convert_type(ac).should == []
-      @o.rb_convert_type(ao).should == []
-      lambda { @o.rb_convert_type(h) }.should raise_error(TypeError)
+    it "returns the object when passed a Bignum" do
+      @o.rb_check_to_integer(bignum_value, "to_int").should == bignum_value
+    end
+
+    it "calls the converting method and returns a Fixnum value" do
+      obj = mock("rb_check_to_integer")
+      obj.should_receive(:to_integer).and_return(10)
+
+      @o.rb_check_to_integer(obj, "to_integer").should equal(10)
+    end
+
+    it "calls the converting method and returns a Bignum value" do
+      obj = mock("rb_check_to_integer")
+      obj.should_receive(:to_integer).and_return(bignum_value)
+
+      @o.rb_check_to_integer(obj, "to_integer").should == bignum_value
+    end
+
+    it "returns nil when the converting method returns nil" do
+      obj = mock("rb_check_to_integer")
+      obj.should_receive(:to_integer).and_return(nil)
+
+      @o.rb_check_to_integer(obj, "to_integer").should be_nil
+    end
+
+    it "returns nil when the converting method does not return an Integer" do
+      obj = mock("rb_check_to_integer")
+      obj.should_receive(:to_integer).and_return("string")
+
+      @o.rb_check_to_integer(obj, "to_integer").should be_nil
     end
   end
 
@@ -338,20 +437,18 @@ describe "CApiObject" do
     end
   end
 
-  ruby_version_is "1.9" do
-    describe "rb_type_p" do
-      it "returns whether object is of the given type" do
-        class DescArray < Array
-        end
-        @o.rb_is_rb_type_p_nil(nil).should == true
-        @o.rb_is_rb_type_p_object([]).should == false
-        @o.rb_is_rb_type_p_object(ObjectTest.new).should == true
-        @o.rb_is_rb_type_p_array([]).should == true
-        @o.rb_is_rb_type_p_array(DescArray.new).should == true
-        @o.rb_is_rb_type_p_module(ObjectTest).should == false
-        @o.rb_is_rb_type_p_class(ObjectTest).should == true
-        @o.rb_is_rb_type_p_data(Time.now).should == true
+  describe "rb_type_p" do
+    it "returns whether object is of the given type" do
+      class DescArray < Array
       end
+      @o.rb_is_rb_type_p_nil(nil).should == true
+      @o.rb_is_rb_type_p_object([]).should == false
+      @o.rb_is_rb_type_p_object(ObjectTest.new).should == true
+      @o.rb_is_rb_type_p_array([]).should == true
+      @o.rb_is_rb_type_p_array(DescArray.new).should == true
+      @o.rb_is_rb_type_p_module(ObjectTest).should == false
+      @o.rb_is_rb_type_p_class(ObjectTest).should == true
+      @o.rb_is_rb_type_p_data(Time.now).should == true
     end
   end
 
@@ -467,28 +564,26 @@ describe "CApiObject" do
       host.tainted?.should be_true
     end
 
-    ruby_version_is "1.9" do
-      it "does not untrust the first argument if the second argument is trusted" do
-        host   = mock("host")
-        source = mock("source")
-        @o.OBJ_INFECT(host, source)
-        host.untrusted?.should be_false
-      end
+    it "does not untrust the first argument if the second argument is trusted" do
+      host   = mock("host")
+      source = mock("source")
+      @o.OBJ_INFECT(host, source)
+      host.untrusted?.should be_false
+    end
 
-      it "untrusts the first argument if the second argument is untrusted" do
-        host   = mock("host")
-        source = mock("source").untrust
-        @o.OBJ_INFECT(host, source)
-        host.untrusted?.should be_true
-      end
+    it "untrusts the first argument if the second argument is untrusted" do
+      host   = mock("host")
+      source = mock("source").untrust
+      @o.OBJ_INFECT(host, source)
+      host.untrusted?.should be_true
+    end
 
-      it "propagates both taint and distrust" do
-        host   = mock("host")
-        source = mock("source").taint.untrust
-        @o.OBJ_INFECT(host, source)
-        host.tainted?.should be_true
-        host.untrusted?.should be_true
-      end
+    it "propagates both taint and distrust" do
+      host   = mock("host")
+      source = mock("source").taint.untrust
+      @o.OBJ_INFECT(host, source)
+      host.tainted?.should be_true
+      host.untrusted?.should be_true
     end
   end
 
@@ -532,30 +627,14 @@ describe "CApiObject" do
       obj.tainted?.should == true
     end
 
-    ruby_version_is ""..."1.9" do
-      it "raises a TypeError if the object passed is frozen" do
-        lambda { @o.rb_obj_taint("".freeze) }.should raise_error(TypeError)
-      end
-    end
-
-    ruby_version_is "1.9" do
-      it "raises a RuntimeError if the object passed is frozen" do
-        lambda { @o.rb_obj_taint("".freeze) }.should raise_error(RuntimeError)
-      end
+    it "raises a RuntimeError if the object passed is frozen" do
+      lambda { @o.rb_obj_taint("".freeze) }.should raise_error(RuntimeError)
     end
   end
 
   describe "rb_check_frozen" do
-    ruby_version_is ""..."1.9" do
-      it "raises a TypeError if the obj is frozen" do
-        lambda { @o.rb_check_frozen("".freeze) }.should raise_error(TypeError)
-      end
-    end
-
-    ruby_version_is "1.9" do
-      it "raises a RuntimeError if the obj is frozen" do
-        lambda { @o.rb_check_frozen("".freeze) }.should raise_error(RuntimeError)
-      end
+    it "raises a RuntimeError if the obj is frozen" do
+      lambda { @o.rb_check_frozen("".freeze) }.should raise_error(RuntimeError)
     end
 
     it "does nothing when object isn't frozen" do
@@ -672,6 +751,12 @@ describe "CApiObject" do
       it "sets and returns the instance variable on an object" do
         @o.rb_iv_set(@test, "@foo", 42).should == 42
         @test.instance_eval { @foo }.should == 42
+      end
+
+      it "sets and returns the instance variable with a bare name" do
+        @o.rb_iv_set(@test, "foo", 42).should == 42
+        @o.rb_iv_get(@test, "foo").should == 42
+        @test.instance_eval { @foo }.should == 7
       end
     end
 

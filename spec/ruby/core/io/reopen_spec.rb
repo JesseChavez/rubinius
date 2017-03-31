@@ -21,12 +21,14 @@ describe "IO#reopen" do
   it "calls #to_io to convert an object" do
     obj = mock("io")
     obj.should_receive(:to_io).and_return(@other_io)
+    obj.stub!(:pos).and_return(0)
     @io.reopen obj
   end
 
   it "changes the class of the instance to the class of the object returned by #to_io" do
     obj = mock("io")
     obj.should_receive(:to_io).and_return(@other_io)
+    obj.stub!(:pos).and_return(0)
     @io.reopen(obj).should be_an_instance_of(File)
   end
 
@@ -108,12 +110,10 @@ describe "IO#reopen with a String" do
     @tmp_file.should have_data("from system\nfrom exec", "r")
   end
 
-  ruby_version_is "1.9" do
-    it "calls #to_path on non-String arguments" do
-      obj = mock('path')
-      obj.should_receive(:to_path).and_return(@other_name)
-      @io.reopen(obj)
-    end
+  it "calls #to_path on non-String arguments" do
+    obj = mock('path')
+    obj.should_receive(:to_path).and_return(@other_name)
+    @io.reopen(obj)
   end
 end
 
@@ -121,12 +121,14 @@ describe "IO#reopen with a String" do
   before :each do
     @name = tmp("io_reopen.txt")
     @other_name = tmp("io_reopen_other.txt")
+    @other_io = nil
 
     rm_r @other_name
   end
 
   after :each do
     @io.close unless @io.closed?
+    @other_io.close if @other_io and not @other_io.closed?
     rm_r @name, @other_name
   end
 
@@ -140,6 +142,19 @@ describe "IO#reopen with a String" do
 
     @name.should have_data("original data")
     @other_name.should have_data("new data")
+  end
+
+  it "closes the file descriptor obtained by opening the new file" do
+    @io = new_io @name, "w"
+
+    @other_io = File.open @other_name, "w"
+    max = @other_io.fileno
+    @other_io.close
+
+    @io.reopen @other_name
+
+    @other_io = File.open @other_name, "w"
+    @other_io.fileno.should == max
   end
 
   it "creates the file if it doesn't exist if the IO is opened in write mode" do
@@ -175,6 +190,34 @@ describe "IO#reopen with a String" do
   it "raises an Errno::ENOENT if the file does not exist and the IO is not opened in write mode" do
     @io = new_io @name, "r"
     lambda { @io.reopen(@other_name) }.should raise_error(Errno::ENOENT)
+  end
+end
+
+describe "IO#reopen with an IO at EOF" do
+  before :each do
+    @name = tmp("io_reopen.txt")
+    touch(@name) { |f| f.puts "a line" }
+    @other_name = tmp("io_reopen_other.txt")
+    touch(@other_name) do |f|
+      f.puts "Line 1"
+      f.puts "Line 2"
+    end
+
+    @io = new_io @name, "r"
+    @other_io = new_io @other_name, "r"
+    @io.read
+  end
+
+  after :each do
+    @io.close unless @io.closed?
+    @other_io.close unless @other_io.closed?
+    rm_r @name, @other_name
+  end
+  
+  it "resets the EOF status to false" do
+    @io.eof?.should be_true    
+    @io.reopen @other_io
+    @io.eof?.should be_false
   end
 end
 

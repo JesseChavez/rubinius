@@ -1,10 +1,10 @@
-desc "Create a release tarball"
-task :release do
-  Dir.chdir "vendor/cache" do
-    sh "rm -f *", :verbose => $verbose
-    sh "gem fetch bundler", :verbose => $verbose
+require "rakelib/release"
+
+task :revision_file do
+  if git_directory
+    File.open(revision_file, "w") { |f| f.write release_revision.join(" ") }
   end
-  sh "bundle update", :verbose => $verbose
-  sh "./configure --release-config", :verbose => $verbose
-  Rake::Task['package:tar'].invoke
 end
+
+desc "Create a release tarball"
+task :release => %W[revision_file package:tar]

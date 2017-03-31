@@ -101,12 +101,20 @@ describe "CApiModule" do
     end
 
     it "returns a constant defined in a superclass" do
-      @m.rb_const_get_from(CApiModuleSpecs::B, :X).should == 1
+      @m.rb_const_get(CApiModuleSpecs::B, :X).should == 1
     end
 
     it "calls #const_missing if the constant is not defined in the class or ancestors" do
       CApiModuleSpecs::A.should_receive(:const_missing).with(:CApiModuleSpecsUndefined)
-      @m.rb_const_get_from(CApiModuleSpecs::A, :CApiModuleSpecsUndefined)
+      @m.rb_const_get(CApiModuleSpecs::A, :CApiModuleSpecsUndefined)
+    end
+
+    it "resolves autoload constants in classes" do
+      @m.rb_const_get(CApiModuleSpecs::A, :D).should == 123
+    end
+
+    it "resolves autoload constants in Object" do
+      @m.rb_const_get(Object, :CApiModuleSpecsAutoload).should == 123
     end
   end
 
@@ -123,11 +131,19 @@ describe "CApiModule" do
       CApiModuleSpecs::M.should_receive(:const_missing).with(:Fixnum)
       @m.rb_const_get_from(CApiModuleSpecs::M, :Fixnum)
     end
+
+    it "resolves autoload constants" do
+      @m.rb_const_get_from(CApiModuleSpecs::A, :C).should == 123
+    end
   end
 
   describe "rb_const_get_at" do
     it "returns a constant defined in the module" do
       @m.rb_const_get_at(CApiModuleSpecs::B, :Y).should == 2
+    end
+
+    it "resolves autoload constants" do
+      @m.rb_const_get_at(CApiModuleSpecs::A, :B).should == 123
     end
 
     it "calls #const_missing if the constant is not defined in the module" do
@@ -267,24 +283,12 @@ describe "CApiModule" do
         @frozen = @class.dup.freeze
       end
 
-      ruby_version_is "" ... "1.9" do
-        it "raises a TypeError when passed a name" do
-          lambda { @m.rb_undef_method @frozen, "ruby_test_method" }.should raise_error(TypeError)
-        end
-
-        it "raises a TypeError when passed a missing name" do
-          lambda { @m.rb_undef_method @frozen, "not_exist" }.should raise_error(TypeError)
-        end
+      it "raises a RuntimeError when passed a name" do
+        lambda { @m.rb_undef_method @frozen, "ruby_test_method" }.should raise_error(RuntimeError)
       end
 
-      ruby_version_is "1.9" do
-        it "raises a RuntimeError when passed a name" do
-          lambda { @m.rb_undef_method @frozen, "ruby_test_method" }.should raise_error(RuntimeError)
-        end
-
-        it "raises a RuntimeError when passed a missing name" do
-          lambda { @m.rb_undef_method @frozen, "not_exist" }.should raise_error(RuntimeError)
-        end
+      it "raises a RuntimeError when passed a missing name" do
+        lambda { @m.rb_undef_method @frozen, "not_exist" }.should raise_error(RuntimeError)
       end
     end
   end

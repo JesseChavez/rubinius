@@ -81,7 +81,7 @@ class MSpecOptions
   # instance to the list of registered options.
   def add(short, long, arg, description, block)
     s = short ? short.dup : "  "
-    s << (short ? ", " : "  ") if long
+    s += (short ? ", " : "  ") if long
     doc "   #{s}#{long} #{arg}".ljust(@width-1) + " #{description}"
     @options << MSpecOption.new(short, long, arg, description, block)
   end
@@ -211,16 +211,8 @@ class MSpecOptions
       case t
       when 'r', 'ruby'
         config[:target] = 'ruby'
-      when 'r19', 'ruby19'
-        config[:target] = 'ruby1.9'
       when 'x', 'rubinius'
         config[:target] = './bin/rbx'
-      when 'x18', 'rubinius18'
-        config[:target] = './bin/rbx -X18'
-      when 'x19', 'rubinius19'
-        config[:target] = './bin/rbx -X19'
-      when 'x20', 'rubinius20'
-        config[:target] = './bin/rbx -X20'
       when 'X', 'rbx'
         config[:target] = 'rbx'
       when 'j', 'jruby'
@@ -231,6 +223,9 @@ class MSpecOptions
         config[:target] = 'maglev-ruby'
       when 't','topaz'
         config[:target] = 'topaz'
+      when 'o','opal'
+        mspec_lib = File.expand_path('../../../', __FILE__)
+        config[:target] = "./bin/opal -syaml -siconv -sfileutils -rnodejs -rnodejs/require -rnodejs/yaml -rprocess -Derror -I#{mspec_lib} -I./lib/ -I. "
       else
         config[:target] = t
       end
@@ -247,7 +242,8 @@ class MSpecOptions
     doc "     j or jruby        invokes jruby in PATH"
     doc "     i or ironruby     invokes ir in PATH"
     doc "     m or maglev       invokes maglev-ruby in PATH"
-    doc "     t or topaz       invokes topaz in PATH"
+    doc "     t or topaz        invokes topaz in PATH"
+    doc "     o or opal         invokes ./bin/opal with options"
     doc "     full path to EXE  invokes EXE directly\n"
 
     on("-T", "--target-opt", "OPT",
@@ -463,10 +459,6 @@ class MSpecOptions
     on("--spec-debug",
        "Invoke the debugger when a spec description matches (see -K, -S)") do
       config[:debugger] = true
-    end
-    on("--spec-gdb",
-       "Invoke Gdb when a spec description matches (see -K, -S)") do
-      config[:gdb] = true
     end
   end
 

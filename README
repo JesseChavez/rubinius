@@ -1,39 +1,61 @@
-1. What is Rubinius
+1. The Rubinius Language Platform
 
-Rubinius is an implementation of the Ruby programming language. Rubinius aims
-to be compatible with Ruby version 2.1.
+Rubinius is a modern language platform that supports a number of programming
+languages.
 
-Rubinius includes a Ruby parser, bytecode virtual machine, bytecode compiler,
-generational garbage collector, and just-in-time (JIT) native machine code
-compiler. Rubinius uses native OS threads with no global interpreter lock.
-Rubinius also provides C-API compatibility for native C extensions.
+Rubinius includes a bytecode virtual machine, generational garbage collector,
+and just-in-time (JIT) native machine code compiler. Rubinius provides
+concurrency support via native OS threads with no global interpreter lock.
 
-The Ruby core library is written almost entirely in Ruby. Rubinius tools, such
-as the bytecode compiler and debugger, are also written in Ruby.  Rubinius
-provides the same standard libraries as Matz's Ruby implementation (MRI) with
-the following exceptions:
+Rubinius runs on Mac OS X and many Unix/Linux operating systems. Microsoft
+Windows is not yet supported.
+
+
+2. Code of Conduct
+
+Participation in the Rubinius project is governed by the Rubinius Code of
+Conduct. See https://rubinius.com/code-of-conduct/
+
+3. The Ruby Programming Language
+
+Many popular Ruby applications, like Rails, run on Rubinius, which aims to be
+compatible with Ruby version 2.3.1.
+
+Rubinius includes a Ruby parser, Ruby bytecode compiler, Ruby core library,
+and C-API compatibility for native C extensions. The Ruby core library is
+written almost entirely in Ruby. The Ruby bytecode compiler and other tools,
+such as the debugger, are also written in Ruby.  Rubinius provides the
+standard Ruby libraries, with the following exceptions:
 
 * Continuation
 * Ripper
 * TracePoint
 * Tracer
 
-Rubinius runs on Mac OS X and many Unix/Linux operating systems.  Microsoft
-Windows is not yet supported.
+The following Ruby features are not supported on Rubinius:
 
-Most popular Ruby applications, like Rails, run on Rubinius.
-
-
-2. License
-
-Rubinius uses the BSD license. See LICENSE for details.
+* Refinements
+* $SAFE levels
 
 
-3. Installing Rubinius from Source
+4. License
+
+All source code in this repository is subject to the terms of the Mozilla Public
+License, version 2.0 unless stated otherwise. A copy of this license can be
+found the file "LICENSE" or at https://www.mozilla.org/MPL/2.0/.
+
+Contributions made prior to January 3rd, 2016 are licensed under the old BSD
+3-clause license. A copy of this license can be found in the file "BSD_LICENSE".
+
+In the event a directory contains a "LICENSE", "LICENSE.txt" or "COPYING" file
+the license specified in said file applies to the contents of said directory and
+all sub directories, overwriting the licenses specified above.
+
+5. Installing Rubinius from Source
 
 To install Rubinius, use the following steps:
 
-  1. Ensure that MRI 2.0+, rubygems, rake, and git are installed
+  1. Ensure that MRI 2.0+, rubygems, rake, git and LLVM are installed
   2. git clone git://github.com/rubinius/rubinius.git
   3. cd rubinius
   4. bundle
@@ -44,27 +66,32 @@ When the install process finishes, follow the directions printed to the
 terminal to add the Rubinius executable (bin) directory to your PATH.
 
 
-4. Using RubyGems
+6. Using RubyGems
 
 Rubinius comes with RubyGems built-in. To install a gem, run the following:
 
-  rbx -S gem install <gem_name>
+  $ rbx -S gem install <gem_name>
 
 
-5. Documentation
+7. Documentation
 
-After installing Rubinius, run 'rbx docs' to access the built-in documentation
-at any time.
+The Rubinius documentation is the Rubinius book:
+
+  https://rubinius.com/book/
 
 
-6. Tickets
+8. Issues & Support
 
 Please file tickets for bugs or problems. The issue tracker is:
 
-  http://github.com/rubinius/rubinius/issues
+  https://github.com/rubinius/rubinius/issues
+
+For additional help, visit the Rubinius Gitter chat room:
+
+  https://gitter.im/rubinius/rubinius
 
 
-7. Contributing
+9. Contributing
 
-The Rubinius team welcomes contributions. For more information read the
-CONTRIBUTING file in the root directory of Rubinius.
+The Rubinius team welcomes contributions. For more information, read the
+.github/contributing.md file.

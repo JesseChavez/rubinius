@@ -11,6 +11,12 @@ module EnumerableSpecs
     end
   end
 
+  class NumerousWithSize < Numerous
+    def size
+      @list.size
+    end
+  end
+
   class EachCounter < Numerous
     attr_reader :times_called, :times_yielded, :arguments_passed
     def initialize(*list)
@@ -32,6 +38,15 @@ module EnumerableSpecs
   class Empty
     include Enumerable
     def each
+    end
+  end
+
+  class EmptyWithSize
+    include Enumerable
+    def each
+    end
+    def size
+      0
     end
   end
 
@@ -270,6 +285,48 @@ module EnumerableSpecs
 
     def initialize_dup(arg)
       @initialize_dup_called = true
+    end
+  end
+
+  class Freezy
+    include Enumerable
+
+    def each
+      yield 1
+      yield 2
+    end
+
+    def to_a
+      super.freeze
+    end
+  end
+
+  class MapReturnsEnumerable
+    include Enumerable
+
+    class EnumerableMapping
+      include Enumerable
+
+      def initialize(items, block)
+        @items = items
+        @block = block
+      end
+
+      def each
+        @items.each do |i|
+          yield @block.call(i)
+        end
+      end
+    end
+
+    def each
+      yield 1
+      yield 2
+      yield 3
+    end
+
+    def map(&block)
+      EnumerableMapping.new(self, block)
     end
   end
 end # EnumerableSpecs utility classes

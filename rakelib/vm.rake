@@ -13,44 +13,40 @@ config.compile_with_llvm = false
 
 CONFIG = config
 DEV_NULL = RUBY_PLATFORM =~ /mingw|mswin/ ? 'NUL' : '/dev/null'
-VM_EXE = RUBY_PLATFORM =~ /mingw|mswin/ ? 'vm/vm.exe' : 'vm/vm'
+VM_EXE = RUBY_PLATFORM =~ /mingw|mswin/ ? 'machine/vm.exe' : 'machine/vm'
 
 ############################################################
 # Files, Flags, & Constants
 
-encoding_database = "vm/gen/encoding_database.cpp"
-transcoders_database = "vm/gen/transcoder_database.cpp"
+encoding_database = "machine/gen/encoding_database.cpp"
+transcoders_database = "machine/gen/transcoder_database.cpp"
 
 vm_release_h = BUILD_CONFIG[:vm_release_h]
 
 ENV.delete 'CDPATH' # confuses llvm_config
 
-INSN_GEN    = %w[ vm/gen/instruction_names.cpp
-                  vm/gen/instruction_names.hpp
-                  vm/gen/instruction_sizes.hpp
-                  vm/gen/instruction_prototypes.hpp
-                  vm/gen/instruction_defines.hpp
-                  vm/gen/instruction_locations.hpp
-                  vm/gen/instruction_implementations.hpp
-                  vm/gen/instruction_visitors.hpp
-                  vm/gen/instruction_effects.hpp
+INSN_GEN    = %w[ machine/gen/instruction_names.cpp
+                  machine/gen/instruction_names.hpp
+                  machine/gen/instruction_sizes.hpp
+                  machine/gen/instruction_prototypes.hpp
+                  machine/gen/instruction_defines.hpp
+                  machine/gen/instruction_locations.hpp
+                  machine/gen/instruction_implementations.hpp
+                  machine/gen/instruction_visitors.hpp
+                  machine/gen/instruction_effects.hpp
                 ]
-TYPE_GEN    = %w[ vm/gen/includes.hpp
-                  vm/gen/kind_of.hpp
-                  vm/gen/object_types.hpp
-                  vm/gen/typechecks.gen.cpp
-                  vm/gen/primitives_declare.hpp
-                  vm/gen/glue_functions.cpp
-                  vm/gen/jit_functions.cpp
-                  vm/gen/invoke_functions.cpp
-                  vm/gen/accessor_functions.cpp
-                  vm/gen/glue_resolver.cpp
-                  vm/gen/jit_resolver.cpp
-                  vm/gen/invoke_resolver.cpp ]
+TYPE_GEN    = %w[ machine/gen/includes.hpp
+                  machine/gen/kind_of.hpp
+                  machine/gen/object_types.hpp
+                  machine/gen/typechecks.gen.cpp
+                  machine/gen/primitives_declare.hpp
+                  machine/gen/invoke_functions.cpp
+                  machine/gen/accessor_functions.cpp
+                  machine/gen/invoke_resolver.cpp ]
 
-GENERATED = %W[ vm/gen/config_variables.h
-                vm/gen/signature.h
-                vm/dtrace/probes.h
+GENERATED = %W[ machine/gen/config_variables.h
+                machine/gen/signature.h
+                machine/dtrace/probes.h
                 #{encoding_database}
                 #{transcoders_database}
                 #{vm_release_h}
@@ -60,67 +56,67 @@ GENERATED = %W[ vm/gen/config_variables.h
 # CompactLookupTable inherits from Tuple, so the header
 # for compactlookuptable.hpp has to come after tuple.hpp
 field_extract_headers = %w[
-  vm/builtin/basic_object.hpp
-  vm/builtin/object.hpp
-  vm/builtin/integer.hpp
-  vm/builtin/fixnum.hpp
-  vm/builtin/array.hpp
-  vm/builtin/bignum.hpp
-  vm/builtin/executable.hpp
-  vm/builtin/access_variable.hpp
-  vm/builtin/alias.hpp
-  vm/builtin/block_environment.hpp
-  vm/builtin/block_as_method.hpp
-  vm/builtin/byte_array.hpp
-  vm/builtin/io.hpp
-  vm/builtin/channel.hpp
-  vm/builtin/module.hpp
-  vm/builtin/constant_table.hpp
-  vm/builtin/class.hpp
-  vm/builtin/compiled_code.hpp
-  vm/builtin/data.hpp
-  vm/builtin/dir.hpp
-  vm/builtin/exception.hpp
-  vm/builtin/float.hpp
-  vm/builtin/immediates.hpp
-  vm/builtin/iseq.hpp
-  vm/builtin/list.hpp
-  vm/builtin/lookup_table.hpp
-  vm/builtin/ffi_pointer.hpp
-  vm/builtin/method_table.hpp
-  vm/builtin/native_function.hpp
-  vm/builtin/packed_object.hpp
-  vm/builtin/randomizer.hpp
-  vm/builtin/regexp.hpp
-  vm/builtin/constant_scope.hpp
-  vm/builtin/encoding.hpp
-  vm/builtin/string.hpp
-  vm/builtin/symbol.hpp
-  vm/builtin/thread.hpp
-  vm/builtin/tuple.hpp
-  vm/builtin/compact_lookup_table.hpp
-  vm/builtin/time.hpp
-  vm/builtin/stat.hpp
-  vm/builtin/native_method.hpp
-  vm/builtin/system.hpp
-  vm/builtin/autoload.hpp
-  vm/builtin/proc.hpp
-  vm/builtin/variable_scope.hpp
-  vm/builtin/location.hpp
-  vm/builtin/constant_cache.hpp
-  vm/builtin/call_site.hpp
-  vm/builtin/mono_inline_cache.hpp
-  vm/builtin/poly_inline_cache.hpp
-  vm/builtin/call_custom_cache.hpp
-  vm/builtin/respond_to_cache.hpp
-  vm/builtin/weakref.hpp
-  vm/builtin/fiber.hpp
-  vm/builtin/thunk.hpp
-  vm/builtin/call_unit.hpp
-  vm/builtin/call_unit_adapter.hpp
-  vm/builtin/atomic.hpp
-  vm/builtin/character.hpp
-  vm/builtin/thread_state.hpp
+  machine/class/basic_object.hpp
+  machine/class/object.hpp
+  machine/class/integer.hpp
+  machine/class/fixnum.hpp
+  machine/class/array.hpp
+  machine/class/bignum.hpp
+  machine/class/executable.hpp
+  machine/class/access_variable.hpp
+  machine/class/alias.hpp
+  machine/class/block_environment.hpp
+  machine/class/block_as_method.hpp
+  machine/class/byte_array.hpp
+  machine/class/io.hpp
+  machine/class/channel.hpp
+  machine/class/module.hpp
+  machine/class/constant_table.hpp
+  machine/class/class.hpp
+  machine/class/compiled_code.hpp
+  machine/class/data.hpp
+  machine/class/dir.hpp
+  machine/class/exception.hpp
+  machine/class/float.hpp
+  machine/class/fsevent.hpp
+  machine/class/immediates.hpp
+  machine/class/iseq.hpp
+  machine/class/list.hpp
+  machine/class/logger.hpp
+  machine/class/lookup_table.hpp
+  machine/class/ffi_pointer.hpp
+  machine/class/method_table.hpp
+  machine/class/native_function.hpp
+  machine/class/packed_object.hpp
+  machine/class/randomizer.hpp
+  machine/class/regexp.hpp
+  machine/class/lexical_scope.hpp
+  machine/class/encoding.hpp
+  machine/class/string.hpp
+  machine/class/symbol.hpp
+  machine/class/thread.hpp
+  machine/class/tuple.hpp
+  machine/class/compact_lookup_table.hpp
+  machine/class/time.hpp
+  machine/class/stat.hpp
+  machine/class/native_method.hpp
+  machine/class/system.hpp
+  machine/class/autoload.hpp
+  machine/class/proc.hpp
+  machine/class/variable_scope.hpp
+  machine/class/location.hpp
+  machine/class/constant_cache.hpp
+  machine/class/call_site.hpp
+  machine/class/weakref.hpp
+  machine/class/fiber.hpp
+  machine/class/thunk.hpp
+  machine/class/atomic.hpp
+  machine/class/character.hpp
+  machine/class/thread_state.hpp
+  machine/class/jit.hpp
+  machine/class/code_db.hpp
+  machine/class/diagnostics.hpp
+  machine/class/trie.hpp
 ]
 
 transcoders_src_dir = File.expand_path "../../vendor/oniguruma/enc/trans", __FILE__
@@ -151,32 +147,15 @@ end
 # Build options.
 namespace :build do
 
-  desc "Build LLVM"
-  task :llvm do
-    if Rubinius::BUILD_CONFIG[:llvm] == :svn
-      unless File.file?("vendor/llvm/Release/bin/llvm-config")
-        Dir.chdir "vendor/llvm" do
-          host = Rubinius::BUILD_CONFIG[:host]
-          llvm_config_flags = "--build=#{host} --host=#{host} " \
-                              "--enable-optimized --disable-assertions "\
-                              " --enable-targets=host,cpp"
-          sh %[sh -c "#{File.expand_path("./configure")} #{llvm_config_flags}"]
-          sh Rubinius::BUILD_CONFIG[:build_make]
-        end
-      end
-    end
-  end
-
   # Issue the actual build commands. NEVER USE DIRECTLY.
   task :build => %W[
-    build:llvm
     #{VM_EXE}
     compiler:generate
     stage:bin
     stage:extra_bins
     stage:capi_include
-    kernel:build
-    stage:kernel
+    core:build
+    stage:core
     stage:runtime
     stage:lib
     gems:melbourne
@@ -198,42 +177,42 @@ def files(targets, dependencies=nil, &block)
   end
 end
 
-directory "vm/gen"
+directory "machine/gen"
 
-file 'vm/codegen/field_extract.rb'    => 'vm/gen'
+file 'machine/codegen/field_extract.rb'    => 'machine/gen'
 
 task :run_field_extract do
-  ruby 'vm/codegen/field_extract.rb', *field_extract_headers
+  ruby 'machine/codegen/field_extract.rb', *field_extract_headers
 end
 
-files TYPE_GEN, field_extract_headers + %w[vm/codegen/field_extract.rb] + [:run_field_extract] do
+files TYPE_GEN, field_extract_headers + %w[machine/codegen/field_extract.rb] + [:run_field_extract] do
 end
 
-encoding_extract = 'vm/codegen/encoding_extract.rb'
+encoding_extract = 'machine/codegen/encoding_extract.rb'
 
 file encoding_database => encoding_extract do |t|
   dir = File.expand_path "../../vendor/oniguruma", __FILE__
   ruby encoding_extract, dir, t.name
 end
 
-transcoders_extract = 'vm/codegen/transcoders_extract.rb'
+transcoders_extract = 'machine/codegen/transcoders_extract.rb'
 
 file transcoders_database => [transcoders_lib_dir, transcoders_extract] do |t|
   ruby transcoders_extract, transcoders_src_dir, t.name
 end
 
 task vm_release_h do |t|
-  write_release t.name, BUILD_CONFIG[:version], BUILD_CONFIG[:release_date]
+  write_release t.name
 end
 
-file 'vm/gen/config_variables.h' => %w[library/rubinius/configuration.rb config.rb] do |t|
+file 'machine/gen/config_variables.h' => %w[library/rubinius/configuration.rb config.rb] do |t|
   puts "GEN #{t.name}"
-  ruby 'vm/codegen/config_vars.rb', t.name
+  ruby 'machine/codegen/config_vars.rb', t.name
 end
 
-file 'vm/dtrace/probes.h' do |t|
+file 'machine/dtrace/probes.h' do |t|
   if Rubinius::BUILD_CONFIG[:dtrace]
-    sh %[dtrace -h -o vm/dtrace/probes.h -s vm/dtrace/probes.d]
+    sh %[dtrace -h -o machine/dtrace/probes.h -s machine/dtrace/probes.d]
   end
 end
 
@@ -254,22 +233,20 @@ task VM_EXE => GENERATED do
   blueprint.build VM_EXE, @parallel_jobs
 end
 
-task 'vm/test/runner' => GENERATED do
+task 'machine/test/runner' => GENERATED do
   blueprint = Daedalus.load "rakelib/blueprint.rb"
-  blueprint.build "vm/test/runner", @parallel_jobs
+  blueprint.build "machine/test/runner", @parallel_jobs
 end
 
 # Generate files for instructions and interpreters
 
 file "gen/method_primitives.cpp" => field_extract_headers
-file "gen/jit_primitives.cpp" => field_extract_headers
 file "gen/invoke_primitives.cpp" => field_extract_headers
 file "gen/accessor_primitives.cpp" => field_extract_headers
 file "gen/method_resolver.cpp" => field_extract_headers
-file "gen/jit_resolver.cpp" => field_extract_headers
 file "gen/invoke_resolver.cpp" => field_extract_headers
 
-iparser = InstructionParser.new "vm/instructions.def"
+iparser = InstructionParser.new "machine/instructions.def"
 
 def generate_instruction_file(parser, generator, name)
   puts "GEN #{name}"
@@ -277,8 +254,8 @@ def generate_instruction_file(parser, generator, name)
   parser.send generator, name
 end
 
-insn_deps = %w[  vm/gen
-                 vm/instructions.def
+insn_deps = %w[  machine/gen
+                 machine/instructions.def
                  rakelib/instruction_parser.rb
               ]
 
@@ -290,39 +267,39 @@ file "lib/compiler/generator_methods.rb" => insn_deps do |t|
   generate_instruction_file iparser, :generate_generator_methods, t.name
 end
 
-file "vm/gen/instruction_names.hpp" => insn_deps do |t|
+file "machine/gen/instruction_names.hpp" => insn_deps do |t|
   generate_instruction_file iparser, :generate_names_header, t.name
 end
 
-file "vm/gen/instruction_names.cpp" => insn_deps do |t|
+file "machine/gen/instruction_names.cpp" => insn_deps do |t|
   generate_instruction_file iparser, :generate_names, t.name
 end
 
-file "vm/gen/instruction_prototypes.hpp" => insn_deps do |t|
+file "machine/gen/instruction_prototypes.hpp" => insn_deps do |t|
   generate_instruction_file iparser, :generate_prototypes, t.name
 end
 
-file "vm/gen/instruction_sizes.hpp" => insn_deps do |t|
+file "machine/gen/instruction_sizes.hpp" => insn_deps do |t|
   generate_instruction_file iparser, :generate_sizes, t.name
 end
 
-file "vm/gen/instruction_defines.hpp" => insn_deps do |t|
+file "machine/gen/instruction_defines.hpp" => insn_deps do |t|
   generate_instruction_file iparser, :generate_defines, t.name
 end
 
-file "vm/gen/instruction_locations.hpp" => insn_deps do |t|
+file "machine/gen/instruction_locations.hpp" => insn_deps do |t|
   generate_instruction_file iparser, :generate_locations, t.name
 end
 
-file "vm/gen/instruction_implementations.hpp" => insn_deps do |t|
+file "machine/gen/instruction_implementations.hpp" => insn_deps do |t|
   generate_instruction_file iparser, :generate_implementations , t.name
 end
 
-file "vm/gen/instruction_visitors.hpp" => insn_deps do |t|
+file "machine/gen/instruction_visitors.hpp" => insn_deps do |t|
   generate_instruction_file iparser, :generate_visitors, t.name
 end
 
-file "vm/gen/instruction_effects.hpp" => insn_deps do |t|
+file "machine/gen/instruction_effects.hpp" => insn_deps do |t|
   generate_instruction_file iparser, :generate_stack_effects, t.name
 end
 
@@ -331,20 +308,27 @@ namespace :vm do
   task :test, :filter do |task, args|
     ENV['SUITE'] = args[:filter] if args[:filter]
     ENV['VERBOSE'] = '1' if $verbose
-    sh 'vm/test/runner', :verbose => $verbose
+    sh 'machine/test/runner', :verbose => $verbose
   end
 
-  task :test => %w[ vm/test/runner ]
+  task :test => %w[ machine/test/runner ]
 
   desc "Clean up vm build files"
   task :clean do
-    blueprint = Daedalus.load "rakelib/blueprint.rb"
+    begin
+      blueprint = Daedalus.load "rakelib/blueprint.rb"
+      blueprint.clean
+    rescue
+      # Ignore clean failures
+    end
+
     files = FileList[
       GENERATED,
-      'vm/gen/*',
-      'vm/test/runner',
-      'vm/test/runner.cpp',
-      'vm/test/runner.o',
+      'machine/dtrace/probes.o',
+      'machine/gen/*',
+      'machine/test/runner',
+      'machine/test/runner.cpp',
+      'machine/test/runner.o',
       VM_EXE,
       BUILD_CONFIG[:program_name],
       'bin/rbx',
@@ -354,31 +338,14 @@ namespace :vm do
       'bin/rdoc',
       'bin/irb',
       'bin/gem',
-      'vm/.deps',
-      'staging'
-    ].exclude("vm/gen/config.h", "vm/gen/paths.h")
+      'machine/.deps',
+    ].exclude("machine/gen/config.h", "machine/gen/paths.h")
 
     files.each do |filename|
       rm_rf filename, :verbose => $verbose
     end
-
-    blueprint.clean
   end
 
   desc "Clean up, including all external libs"
   task :distclean => :clean
-
-  desc "Show which primitives are missing"
-  task :missing_primitives do
-    kernel_files = FileList['kernel/**/*.rb'].join " "
-    kernel_primitives = `grep 'Rubinius.primitive' #{kernel_files} | awk '{ print $3 }'`
-    kernel_primitives = kernel_primitives.gsub(':', '').split("\n").sort.uniq
-
-    cpp_primitives = `grep 'Rubinius.primitive' vm/builtin/*.hpp | awk '{ print $4 }'`
-    cpp_primitives = cpp_primitives.gsub(':', '').split("\n").sort.uniq
-
-    missing = kernel_primitives - cpp_primitives
-
-    puts missing.join("\n")
-  end
 end

@@ -147,6 +147,28 @@ describe "CApiNumericSpecs" do
     end
   end
 
+  describe "rb_int2num" do
+    it "raises a TypeError if passed nil" do
+      lambda { @s.rb_int2num(nil) }.should raise_error(TypeError)
+    end
+
+    it "converts a Float" do
+      @s.rb_int2num(4.2).should == 4
+    end
+
+    it "raises a RangeError when passed a BigNum" do
+      lambda { @s.rb_int2num(bignum_value) }.should raise_error(RangeError)
+    end
+
+    it "converts a Fixnum" do
+      @s.rb_int2num(5).should == 5
+    end
+
+    it "converts a negative Fixnum" do
+      @s.rb_int2num(-11).should == -11
+    end
+  end
+
   describe "rb_num2ulong" do
     it "raises a TypeError if passed nil" do
       lambda { @s.rb_num2ulong(nil) }.should raise_error(TypeError)
@@ -309,92 +331,87 @@ describe "CApiNumericSpecs" do
     end
   end
 
-  ruby_version_is "1.9" do
-    # These functions exist pre-1.9 but use the wacktastic ruby_frame->orig_func
-    # mechanism to get the original method, so we're not spec'ing them.
+  describe "rb_num_coerce_bin" do
+    it "calls #coerce on the first argument" do
+      obj = mock("rb_num_coerce_bin")
+      obj.should_receive(:coerce).with(2).and_return([1, 2])
 
-    describe "rb_num_coerce_bin" do
-      it "calls #coerce on the first argument" do
-        obj = mock("rb_num_coerce_bin")
-        obj.should_receive(:coerce).with(2).and_return([1, 2])
-
-        @s.rb_num_coerce_bin(2, obj, :+).should == 3
-      end
-
-      it "calls the specified method on the first argument returned by #coerce" do
-        obj = mock("rb_num_coerce_bin")
-        obj.should_receive(:coerce).with(2).and_return([obj, 2])
-        obj.should_receive(:+).with(2).and_return(3)
-
-        @s.rb_num_coerce_bin(2, obj, :+).should == 3
-      end
-
-      it "raises a TypeError if #coerce does not return an Array" do
-        obj = mock("rb_num_coerce_bin")
-        obj.should_receive(:coerce).with(2).and_return(nil)
-
-        lambda { @s.rb_num_coerce_bin(2, obj, :+) }.should raise_error(TypeError)
-      end
+      @s.rb_num_coerce_bin(2, obj, :+).should == 3
     end
 
-    describe "rb_num_coerce_cmp" do
-      it "calls #coerce on the first argument" do
-        obj = mock("rb_num_coerce_cmp")
-        obj.should_receive(:coerce).with(2).and_return([1, 2])
+    it "calls the specified method on the first argument returned by #coerce" do
+      obj = mock("rb_num_coerce_bin")
+      obj.should_receive(:coerce).with(2).and_return([obj, 2])
+      obj.should_receive(:+).with(2).and_return(3)
 
-        @s.rb_num_coerce_cmp(2, obj, :<=>).should == -1
-      end
-
-      it "calls the specified method on the first argument returned by #coerce" do
-        obj = mock("rb_num_coerce_cmp")
-        obj.should_receive(:coerce).with(2).and_return([obj, 2])
-        obj.should_receive(:<=>).with(2).and_return(-1)
-
-        @s.rb_num_coerce_cmp(2, obj, :<=>).should == -1
-      end
-
-      it "returns nil if passed nil" do
-        @s.rb_num_coerce_cmp(nil, 2, :<=>).should be_nil
-      end
-
-      it "returns nil if #coerce does not return an Array" do
-        obj = mock("rb_num_coerce_cmp")
-        obj.should_receive(:coerce).with(2).and_return(nil)
-
-        @s.rb_num_coerce_cmp(2, obj, :<=>).should be_nil
-      end
+      @s.rb_num_coerce_bin(2, obj, :+).should == 3
     end
 
-    describe "rb_num_coerce_relop" do
-      it "calls #coerce on the first argument" do
-        obj = mock("rb_num_coerce_relop")
-        obj.should_receive(:coerce).with(2).and_return([1, 2])
+    it "raises a TypeError if #coerce does not return an Array" do
+      obj = mock("rb_num_coerce_bin")
+      obj.should_receive(:coerce).with(2).and_return(nil)
 
-        @s.rb_num_coerce_relop(2, obj, :<).should be_true
-      end
+      lambda { @s.rb_num_coerce_bin(2, obj, :+) }.should raise_error(TypeError)
+    end
+  end
 
-      it "calls the specified method on the first argument returned by #coerce" do
-        obj = mock("rb_num_coerce_relop")
-        obj.should_receive(:coerce).with(2).and_return([obj, 2])
-        obj.should_receive(:<).with(2).and_return(false)
+  describe "rb_num_coerce_cmp" do
+    it "calls #coerce on the first argument" do
+      obj = mock("rb_num_coerce_cmp")
+      obj.should_receive(:coerce).with(2).and_return([1, 2])
 
-        @s.rb_num_coerce_relop(2, obj, :<).should be_false
-      end
+      @s.rb_num_coerce_cmp(2, obj, :<=>).should == -1
+    end
 
-      it "raises an ArgumentError if #<op> returns nil" do
-        obj = mock("rb_num_coerce_relop")
-        obj.should_receive(:coerce).with(2).and_return([obj, 2])
-        obj.should_receive(:<).with(2).and_return(nil)
+    it "calls the specified method on the first argument returned by #coerce" do
+      obj = mock("rb_num_coerce_cmp")
+      obj.should_receive(:coerce).with(2).and_return([obj, 2])
+      obj.should_receive(:<=>).with(2).and_return(-1)
 
-        lambda { @s.rb_num_coerce_relop(2, obj, :<) }.should raise_error(ArgumentError)
-      end
+      @s.rb_num_coerce_cmp(2, obj, :<=>).should == -1
+    end
 
-      it "raises an ArgumentError if #coerce does not return an Array" do
-        obj = mock("rb_num_coerce_relop")
-        obj.should_receive(:coerce).with(2).and_return(nil)
+    it "returns nil if passed nil" do
+      @s.rb_num_coerce_cmp(nil, 2, :<=>).should be_nil
+    end
 
-        lambda { @s.rb_num_coerce_relop(2, obj, :<) }.should raise_error(ArgumentError)
-      end
+    it "returns nil if #coerce does not return an Array" do
+      obj = mock("rb_num_coerce_cmp")
+      obj.should_receive(:coerce).with(2).and_return(nil)
+
+      @s.rb_num_coerce_cmp(2, obj, :<=>).should be_nil
+    end
+  end
+
+  describe "rb_num_coerce_relop" do
+    it "calls #coerce on the first argument" do
+      obj = mock("rb_num_coerce_relop")
+      obj.should_receive(:coerce).with(2).and_return([1, 2])
+
+      @s.rb_num_coerce_relop(2, obj, :<).should be_true
+    end
+
+    it "calls the specified method on the first argument returned by #coerce" do
+      obj = mock("rb_num_coerce_relop")
+      obj.should_receive(:coerce).with(2).and_return([obj, 2])
+      obj.should_receive(:<).with(2).and_return(false)
+
+      @s.rb_num_coerce_relop(2, obj, :<).should be_false
+    end
+
+    it "raises an ArgumentError if #<op> returns nil" do
+      obj = mock("rb_num_coerce_relop")
+      obj.should_receive(:coerce).with(2).and_return([obj, 2])
+      obj.should_receive(:<).with(2).and_return(nil)
+
+      lambda { @s.rb_num_coerce_relop(2, obj, :<) }.should raise_error(ArgumentError)
+    end
+
+    it "raises an ArgumentError if #coerce does not return an Array" do
+      obj = mock("rb_num_coerce_relop")
+      obj.should_receive(:coerce).with(2).and_return(nil)
+
+      lambda { @s.rb_num_coerce_relop(2, obj, :<) }.should raise_error(ArgumentError)
     end
   end
 end

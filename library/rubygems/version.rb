@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 ##
 # The Version class processes string versions into comparable
 # values. A version string should normally be a series of numbers
@@ -21,6 +22,11 @@
 # 2. 1.0.b1
 # 3. 1.0.a.2
 # 4. 0.9
+#
+# If you want to specify a version restriction that includes both prereleases
+# and regular releases of the 1.x series this is the best way:
+#
+#   s.add_dependency 'example', '>= 1.0.0.a', '< 2.0.0'
 #
 # == How Software Changes
 #
@@ -81,8 +87,8 @@
 #
 # * Any "public" release of a gem should have a different version.  Normally
 #   that means incrementing the build number.  This means a developer can
-#   generate builds all day long for himself, but as soon as he/she makes a
-#   public release, the version must be updated.
+#   generate builds all day long, but as soon as they make a public release,
+#   the version must be updated.
 #
 # === Examples
 #
@@ -99,26 +105,25 @@
 # Version 1.1.1:: Fixed a bug in the linked list implementation.
 # Version 1.1.2:: Fixed a bug introduced in the last fix.
 #
-# Client A needs a stack with basic push/pop capability.  He writes to the
-# original interface (no <tt>top</tt>), so his version constraint looks
-# like:
+# Client A needs a stack with basic push/pop capability.  They write to the
+# original interface (no <tt>top</tt>), so their version constraint looks like:
 #
-#   gem 'stack', '~> 0.0'
+#   gem 'stack', '>= 0.0'
 #
 # Essentially, any version is OK with Client A.  An incompatible change to
-# the library will cause him grief, but he is willing to take the chance (we
-# call Client A optimistic).
+# the library will cause them grief, but they are willing to take the chance
+# (we call Client A optimistic).
 #
-# Client B is just like Client A except for two things: (1) He uses the
-# <tt>depth</tt> method and (2) he is worried about future
-# incompatibilities, so he writes his version constraint like this:
+# Client B is just like Client A except for two things: (1) They use the
+# <tt>depth</tt> method and (2) they are worried about future
+# incompatibilities, so they write their version constraint like this:
 #
 #   gem 'stack', '~> 0.1'
 #
 # The <tt>depth</tt> method was introduced in version 0.1.0, so that version
 # or anything later is fine, as long as the version stays below version 1.0
 # where incompatibilities are introduced.  We call Client B pessimistic
-# because he is worried about incompatible future changes (it is OK to be
+# because they are worried about incompatible future changes (it is OK to be
 # pessimistic!).
 #
 # == Preventing Version Catastrophe:
@@ -139,14 +144,16 @@
 #   "~> 3.0.0"    3.0.0 ... 3.1
 #   "~> 3.5"      3.5   ... 4.0
 #   "~> 3.5.0"    3.5.0 ... 3.6
+#   "~> 3"        3.0   ... 4.0
+#
+# For the last example, single-digit versions are automatically extended with
+# a zero to give a sensible result.
 
 class Gem::Version
   autoload :Requirement, 'rubygems/requirement'
 
   include Comparable
 
-  # FIX: These are only used once, in .correct?. Do they deserve to be
-  # constants?
   VERSION_PATTERN = '[0-9]+(?>\.[0-9a-zA-Z]+)*(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?' # :nodoc:
   ANCHORED_VERSION_PATTERN = /\A\s*(#{VERSION_PATTERN})?\s*\z/ # :nodoc:
 
@@ -174,8 +181,6 @@ class Gem::Version
   #   ver2 = Version.create(ver1)       # -> (ver1)
   #   ver3 = Version.create(nil)        # -> nil
 
-  # REFACTOR: There's no real reason this should be separate from #initialize.
-
   def self.create input
     if self === input then # check yourself before you wreck yourself
       input
@@ -188,7 +193,9 @@ class Gem::Version
 
   @@all = {}
 
-  def self.new version
+  def self.new version # :nodoc:
+    return super unless Gem::Version == self
+
     @@all[version] ||= super
   end
 
@@ -211,12 +218,14 @@ class Gem::Version
   # Pre-release (alpha) parts, e.g, 5.3.1.b.2 => 5.4, are ignored.
 
   def bump
-    segments = self.segments.dup
-    segments.pop while segments.any? { |s| String === s }
-    segments.pop if segments.size > 1
+    @bump ||= begin
+                segments = self.segments
+                segments.pop while segments.any? { |s| String === s }
+                segments.pop if segments.size > 1
 
-    segments[-1] = segments[-1].succ
-    self.class.new segments.join(".")
+                segments[-1] = segments[-1].succ
+                self.class.new segments.join(".")
+              end
   end
 
   ##
@@ -224,11 +233,11 @@ class Gem::Version
   # same precision. Version "1.0" is not the same as version "1".
 
   def eql? other
-    self.class === other and @version == other.version
+    self.class === other and @version == other._version
   end
 
   def hash # :nodoc:
-    @hash ||= segments.hash
+    @version.hash
   end
 
   def init_with coder # :nodoc:
@@ -255,17 +264,17 @@ class Gem::Version
     initialize array[0]
   end
 
-  def yaml_initialize(tag, map)
+  def yaml_initialize(tag, map) # :nodoc:
     @version = map['version']
     @segments = nil
     @hash = nil
   end
 
-  def to_yaml_properties
+  def to_yaml_properties # :nodoc:
     ["@version"]
   end
 
-  def encode_with coder
+  def encode_with coder # :nodoc:
     coder.add 'version', @version
   end
 
@@ -273,7 +282,10 @@ class Gem::Version
   # A version is considered a prerelease if it contains a letter.
 
   def prerelease?
-    @prerelease ||= !!(@version =~ /[a-zA-Z]/)
+    unless instance_variable_defined? :@prerelease
+      @prerelease = !!(@version =~ /[a-zA-Z]/)
+    end
+    @prerelease
   end
 
   def pretty_print q # :nodoc:
@@ -285,28 +297,24 @@ class Gem::Version
   # Non-prerelease versions return themselves.
 
   def release
-    return self unless prerelease?
-
-    segments = self.segments.dup
-    segments.pop while segments.any? { |s| String === s }
-    self.class.new segments.join('.')
+    @release ||= if prerelease?
+                   segments = self.segments
+                   segments.pop while segments.any? { |s| String === s }
+                   self.class.new segments.join('.')
+                 else
+                   self
+                 end
   end
 
   def segments # :nodoc:
-
-    # segments is lazy so it can pick up version values that come from
-    # old marshaled versions, which don't go through marshal_load.
-
-    @segments ||= @version.scan(/[0-9]+|[a-z]+/i).map do |s|
-      /^\d+$/ =~ s ? s.to_i : s
-    end
+    _segments.dup
   end
 
   ##
   # A recommended version for use with a ~> Requirement.
 
   def approximate_recommendation
-    segments = self.segments.dup
+    segments = self.segments
 
     segments.pop    while segments.any? { |s| String === s }
     segments.pop    while segments.size > 2
@@ -323,10 +331,10 @@ class Gem::Version
 
   def <=> other
     return unless Gem::Version === other
-    return 0 if @version == other.version
+    return 0 if @version == other._version
 
-    lhsegments = segments
-    rhsegments = other.segments
+    lhsegments = _segments
+    rhsegments = other._segments
 
     lhsize = lhsegments.size
     rhsize = rhsegments.size
@@ -346,5 +354,21 @@ class Gem::Version
     end
 
     return 0
+  end
+
+  protected
+
+  def _version
+    @version
+  end
+
+  def _segments
+    # segments is lazy so it can pick up version values that come from
+    # old marshaled versions, which don't go through marshal_load.
+    # since this version object is cached in @@all, its @segments should be frozen
+
+    @segments ||= @version.scan(/[0-9]+|[a-z]+/i).map do |s|
+      /^\d+$/ =~ s ? s.to_i : s
+    end.freeze
   end
 end

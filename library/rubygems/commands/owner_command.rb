@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 require 'rubygems/command'
 require 'rubygems/local_remote_options'
 require 'rubygems/gemcutter_utilities'
@@ -65,7 +66,7 @@ permission to.
 
       say "Owners for gem: #{name}"
       owners.each do |owner|
-        say "- #{owner['email']}"
+        say "- #{owner['email'] || owner['handle'] || owner['id']}"
       end
     end
   end
@@ -86,7 +87,9 @@ permission to.
           request.add_field "Authorization", api_key
         end
 
-        with_response response, "Removing #{owner}"
+        action = method == :delete ? "Removing" : "Adding"
+
+        with_response response, "#{action} #{owner}"
       rescue
         # ignore
       end
@@ -94,4 +97,3 @@ permission to.
   end
 
 end
-

@@ -37,6 +37,7 @@ TAGS
 autom4te.cache
 code-cache
 /config.rb
+/config.rb.in
 cscope.files
 cscope.out
 configure.log
@@ -52,7 +53,10 @@ tmtags
 /share
 /work
 /staging
-Gemfile.lock
+/bootstrap
+/build/bin/cc
+/build/bin/c++
+Gemfile.installed.lock
 
 # .revision tracks configure and code revision consistency
 .revision
@@ -62,34 +66,32 @@ Gemfile.lock
 /bin/*
 
 # don't ignore our commands
-!/bin/bm
-!/bin/bm-automatic
-!/bin/cmspec
-!/bin/contributors.rb
-!/bin/contributors.sh
+!/bin/benchmark
 !/bin/laces.rb
 !/bin/mkspec
 !/bin/mspec
-!/bin/prof.rb
+!/bin/testrb
 
 # don't ignore spec/tags
 !/spec/tags
 
-/vm/log
-/vm/.deps
-/vm/vm.exe
+/machine/log
+/machine/.deps
+/machine/vm.exe
 
-/vm/test/ruby.h
+/machine/test/ruby.h
 
-/kernel/signature.rb
+# rubysl-digest installs this header
+machine/include/capi/ruby/digest.h
 
-# Generated documentation
-doc/generated/vm
-web/doc/*/*.bak
-web/doc/*/*.new
+/core/signature.rb
+/core/build_config.rb
 
 # Ignore generated DTrace header
-vm/dtrace/probes.h
+machine/dtrace/probes.h
 
 # Ignore rubygems except bundled ones
 vendor/cache/*
+
+.build_ruby
+.build_signature

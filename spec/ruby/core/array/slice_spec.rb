@@ -37,6 +37,17 @@ describe "Array#slice!" do
     a.should == []
     a.slice!(0, 4).should == []
     a.should == []
+
+    a = [1]
+    a.slice!(0, 1).should == [1]
+    a.should == []
+    a[-1].should == nil
+  end
+
+  it "returns nil if length is negative" do
+    a = [1, 2, 3]
+    a.slice!(2, -1).should == nil
+    a.should == [1, 2, 3]
   end
 
   it "properly handles recursive arrays" do
@@ -113,57 +124,30 @@ describe "Array#slice!" do
     a.should == []
   end
 
-  ruby_version_is "" ... "1.8.7" do
-    # See http://groups.google.com/group/ruby-core-google/t/af70e3d0e9b82f39
-    it "expands self when indices are out of bounds" do
-      a = [1, 2]
-      a.slice!(4).should == nil
-      a.should == [1, 2]
-      a.slice!(4, 0).should == nil
-      a.should == [1, 2, nil, nil]
-      a.slice!(6, 1).should == nil
-      a.should == [1, 2, nil, nil, nil, nil]
-      a.slice!(8...8).should == nil
-      a.should == [1, 2, nil, nil, nil, nil, nil, nil]
-      a.slice!(10..10).should == nil
-      a.should == [1, 2, nil, nil, nil, nil, nil, nil, nil, nil]
-    end
+  it "does not expand array with indices out of bounds" do
+    a = [1, 2]
+    a.slice!(4).should == nil
+    a.should == [1, 2]
+    a.slice!(4, 0).should == nil
+    a.should == [1, 2]
+    a.slice!(6, 1).should == nil
+    a.should == [1, 2]
+    a.slice!(8...8).should == nil
+    a.should == [1, 2]
+    a.slice!(10..10).should == nil
+    a.should == [1, 2]
   end
 
-  ruby_version_is "1.8.7" do
-    it "does not expand array with indices out of bounds" do
-      a = [1, 2]
-      a.slice!(4).should == nil
-      a.should == [1, 2]
-      a.slice!(4, 0).should == nil
-      a.should == [1, 2]
-      a.slice!(6, 1).should == nil
-      a.should == [1, 2]
-      a.slice!(8...8).should == nil
-      a.should == [1, 2]
-      a.slice!(10..10).should == nil
-      a.should == [1, 2]
-    end
-
-    it "does not expand array with negative indices out of bounds" do
-      a = [1, 2]
-      a.slice!(-3, 1).should == nil
-      a.should == [1, 2]
-      a.slice!(-3..2).should == nil
-      a.should == [1, 2]
-    end
+  it "does not expand array with negative indices out of bounds" do
+    a = [1, 2]
+    a.slice!(-3, 1).should == nil
+    a.should == [1, 2]
+    a.slice!(-3..2).should == nil
+    a.should == [1, 2]
   end
 
-  ruby_version_is "" ... "1.9" do
-    it "raises a TypeError on a frozen array" do
-      lambda { ArraySpecs.frozen_array.slice!(0, 0) }.should raise_error(TypeError)
-    end
-  end
-
-  ruby_version_is "1.9" do
-    it "raises a RuntimeError on a frozen array" do
-      lambda { ArraySpecs.frozen_array.slice!(0, 0) }.should raise_error(RuntimeError)
-    end
+  it "raises a RuntimeError on a frozen array" do
+    lambda { ArraySpecs.frozen_array.slice!(0, 0) }.should raise_error(RuntimeError)
   end
 end
 

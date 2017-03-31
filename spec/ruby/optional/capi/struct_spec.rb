@@ -28,16 +28,8 @@ describe "C-API Struct function" do
       Struct.const_defined?(:CAPIStruct).should be_true
     end
 
-    ruby_version_is ""..."1.9" do
-      it "returns the member names as Strings" do
-        @struct.members.sort.should == ["a", "b", "c"]
-      end
-    end
-
-    ruby_version_is "1.9" do
-      it "returns the member names as Symbols" do
-        @struct.members.sort.should == [:a, :b, :c]
-      end
+    it "returns the member names as Symbols" do
+      @struct.members.sort.should == [:a, :b, :c]
     end
   end
 end
@@ -59,16 +51,8 @@ describe "C-API Struct function" do
       instance.c.should == 3
     end
 
-    ruby_version_is ""..."1.9" do
-      it "returns the member names as Strings" do
-        @struct.members.sort.should == ["a", "b", "c"]
-      end
-    end
-
-    ruby_version_is "1.9" do
-      it "returns the member names as Symbols" do
-        @struct.members.sort.should == [:a, :b, :c]
-      end
+    it "returns the member names as Symbols" do
+      @struct.members.sort.should == [:a, :b, :c]
     end
   end
 end
@@ -140,6 +124,20 @@ describe "C-API Struct function" do
       i.a.should == 1
       i.b.should == 2
       i.c.should == 3
+    end
+  end
+
+  describe "rb_struct_s_members" do
+    it "returns the members of a Struct as an Array" do
+      struct = Struct.new(:foo, :bar)
+
+      @s.rb_struct_s_members(struct).should == [:foo, :bar]
+    end
+
+    it "returns the members of a Struct instance as an Array" do
+      struct = Struct.new(:foo, :bar).new
+
+      @s.rb_struct_s_members(struct).should == [:foo, :bar]
     end
   end
 end

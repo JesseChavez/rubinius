@@ -1,6 +1,7 @@
 require 'bundler/setup'
 require 'redcard'
 require './rakelib/configure'
+require './rakelib/build_signature'
 
 include Rake::DSL if Rake.const_defined? :DSL
 
@@ -10,9 +11,16 @@ if ENV["CDPATH"]
   ENV.delete("CDPATH")
 end
 
+# Wipe out RUBYGEMS_GEMDEPS, it causes the build to fail with
+# "no such file to load -- tsort" when running rbx extconf.rb
+if ENV["RUBYGEMS_GEMDEPS"]
+  ENV.delete("RUBYGEMS_GEMDEPS")
+end
+
 $trace ||= false
 $VERBOSE = true
 $verbose = Rake.application.options.trace || ARGV.delete("-v")
+$cleaning = Rake.application.top_level_tasks.include?("clean")
 
 if !$verbose and respond_to?(:verbose)
   verbose(false) if verbose() == :default
@@ -24,11 +32,15 @@ BUILD_CONFIG = {} unless Object.const_defined? :BUILD_CONFIG
 
 def load_configuration
   config_rb = File.expand_path "../config.rb", __FILE__
-  config_h  = File.expand_path "../vm/gen/config.h", __FILE__
+  config_h  = File.expand_path "../machine/gen/config.h", __FILE__
 
   unless File.exist?(config_rb) and File.exist?(config_h)
-    STDERR.puts "Please run ./configure first"
-    exit 1
+    if $cleaning
+      exit 0
+    else
+      sh "./configure"
+      return load_configuration
+    end
   end
 
   load config_rb
@@ -37,7 +49,7 @@ end
 
 load_configuration
 
-unless BUILD_CONFIG[:config_version] == 188
+unless verify_build_signature or $cleaning or ENV["RBX_IGNORE_BUILD_SIGNATURE"]
   STDERR.puts "Your configuration is outdated, please run ./configure first"
   exit 1
 end
@@ -48,48 +60,16 @@ unless RedCard.check :ruby, :rubinius
   exit 1
 end
 
+if BUILD_CONFIG[:build_bin]
+  ENV["PATH"] = "#{BUILD_CONFIG[:build_bin]}:#{ENV["PATH"]}"
+end
+
 def libprefixdir
   if BUILD_CONFIG[:stagingdir]
     "#{BUILD_CONFIG[:stagingdir]}#{BUILD_CONFIG[:libdir]}"
   else
     "#{BUILD_CONFIG[:sourcedir]}/lib"
   end
-end
-
-# Records the full path to the ruby executable that runs this configure
-# script. That path will be made available to the rest of the build system
-# so the same version of ruby is invoked as needed.
-#
-# This is duplicated from the configure script for now.
-@build_ruby = nil
-
-def build_ruby
-  unless @build_ruby
-    bin = RbConfig::CONFIG["RUBY_INSTALL_NAME"] || RbConfig::CONFIG["ruby_install_name"]
-    bin += (RbConfig::CONFIG['EXEEXT'] || RbConfig::CONFIG['exeext'] || '')
-    @build_ruby = File.join(RbConfig::CONFIG['bindir'], bin)
-  end
-  @build_ruby
-end
-
-unless BUILD_CONFIG[:build_ruby] == build_ruby || ENV["RBX_SKIP_BUILD_RUBY_CHECK"]
-  STDERR.puts "\nUnable to build using the running Ruby executable (#{build_ruby}). Expected #{BUILD_CONFIG[:build_ruby]}\n\n"
-
-  STDERR.puts "To resolve this issue:"
-  if ENV['PATH'] =~ /#{BUILD_CONFIG[:bindir]}/
-    STDERR.puts "  * Remove '#{BUILD_CONFIG[:bindir]}' from your PATH."
-  elsif build_ruby == File.join(BUILD_CONFIG[:bindir], BUILD_CONFIG[:program_name])
-    # This may occur using rbx from the build directory to build a version
-    # of rbx to install. The rbx in the build directory will pick up the
-    # lib/rubinius/build_config.rb that was just written by configure.
-    # Obviously, this chewing gum, duct tape, bailing wire, and toilet paper
-    # system needs fixing.
-    STDERR.puts "  * Configure using a Ruby executable other than the one in your build directory."
-  else
-    STDERR.puts "  * Use '#{BUILD_CONFIG[:build_ruby]}' to build."
-  end
-
-  exit 1
 end
 
 # Set the build compiler to the configured compiler unless
@@ -104,6 +84,7 @@ class SpecRunner
 
   @at_exit_handler_set = false
   @at_exit_status = 0
+  @flags = nil
 
   def self.at_exit_status
     @at_exit_status
@@ -117,23 +98,27 @@ class SpecRunner
   end
 
   def self.set_at_exit_status(status)
-    @at_exit_status = status
+    @at_exit_status = status || 1
+  end
+
+  def self.flags
+    @flags
+  end
+
+  def self.flags=(value)
+    @flags = value
   end
 
   def initialize
-    ENV.delete("RUBYOPT")
-    ENV.delete("GEM_HOME")
-    ENV.delete("GEM_PATH")
-
     @handler = lambda do |ok, status|
       self.class.set_at_exit_status(status.exitstatus) unless ok
     end
   end
 
-  def run(suite=:ci_files, flags=nil)
+  def run(suite=:ci_files)
     self.class.set_at_exit_handler
 
-    sh("bin/mspec ci :#{suite} #{ENV['CI_MODE_FLAG'] || flags} -t bin/#{BUILD_CONFIG[:program_name]} -d --agent --background", &@handler)
+    sh("bin/mspec ci :#{suite} #{self.class.flags} -t bin/#{BUILD_CONFIG[:program_name]} -d --background", &@handler)
   end
 end
 
@@ -145,6 +130,10 @@ end
 
 def check_status
   exit 1 unless SpecRunner.at_exit_status == 0
+end
+
+def clean_environment
+  ENV['GEM_PATH'] = ENV['GEM_HOME'] = ENV['RUBYOPT'] = nil
 end
 
 task :check_status do
@@ -172,7 +161,7 @@ task :rebuild => %w[clean build]
 desc 'Remove rubinius build files'
 task :clean => %w[
   vm:clean
-  kernel:clean
+  core:clean
   clean:crap
 ]
 
@@ -191,28 +180,25 @@ namespace :clean do
   end
 end
 
-desc "Run the Rubinius documentation website"
-task :docs do
-  require 'kernel/delta/options'
-  require 'rbconfig'
-  require 'webrick'
-  require 'lib/rubinius/documentation'
-
-  Rubinius::Documentation.main
-end
-
-spec_runner = SpecRunner.new
-
-desc "Run CI in default (configured) mode but do not rebuild on failure"
+desc "Run specs in default (configured) mode but do not rebuild on failure"
 task :spec => %w[build vm:test] do
+  clean_environment
+
+  spec_runner = SpecRunner.new
   spec_runner.run
 end
 
-desc "Print list of items marked to-do in kernel/ (@todo|TODO)"
+desc "Run specs as in the spec task, but with CI formatting"
+task :ci do
+  SpecRunner.flags = "-V" # show spec file names
+  Rake::Task["spec"].invoke
+end
+
+desc "Print list of items marked to-do in core/ (@todo|TODO)"
 task :todos do
 
   # create array with files to be checked
-  filesA = Dir['kernel/**/*.*']
+  filesA = Dir['core/*.*']
 
   # search for @todo or TODO
   filesA.sort!.each do |filename|

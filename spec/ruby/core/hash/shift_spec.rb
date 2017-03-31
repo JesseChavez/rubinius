@@ -26,17 +26,16 @@ describe "Hash#shift" do
     h.shift.should == [h, nil]
   end
 
-  ruby_version_is "" ... "1.9" do
-    it "raises a TypeError if called on a frozen instance" do
-      lambda { HashSpecs.frozen_hash.shift  }.should raise_error(TypeError)
-      lambda { HashSpecs.empty_frozen_hash.shift }.should raise_error(TypeError)
-    end
+  it "preserves Hash invariants when removing the last item" do
+    h = new_hash(:a => 1, :b => 2)
+    h.shift.should == [:a, 1]
+    h.shift.should == [:b, 2]
+    h[:c] = 3
+    h.should == {:c => 3}
   end
 
-  ruby_version_is "1.9" do
-    it "raises a RuntimeError if called on a frozen instance" do
-      lambda { HashSpecs.frozen_hash.shift  }.should raise_error(RuntimeError)
-      lambda { HashSpecs.empty_frozen_hash.shift }.should raise_error(RuntimeError)
-    end
+  it "raises a RuntimeError if called on a frozen instance" do
+    lambda { HashSpecs.frozen_hash.shift  }.should raise_error(RuntimeError)
+    lambda { HashSpecs.empty_frozen_hash.shift }.should raise_error(RuntimeError)
   end
 end

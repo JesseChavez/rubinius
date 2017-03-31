@@ -77,11 +77,7 @@ class Object
     when :engine
       case RUBY_NAME
       when 'rbx'
-        if SpecGuard.ruby_version < "1.9"
-          "bin/rbx"
-        else
-          "bin/rbx -X19"
-        end
+        "bin/rbx"
       when 'jruby'
         "bin/jruby"
       when 'maglev'
@@ -109,7 +105,7 @@ class Object
       # It has been reported that File.executable is not reliable
       # on Windows platforms (see commit 56bc555c). So, we check the
       # platform.
-      if File.exists?(exe) and (PlatformGuard.windows? or File.executable?(exe))
+      if File.exist?(exe) and (PlatformGuard.windows? or File.executable?(exe))
         return [File.expand_path(exe), *rest].join(" ")
       end
     end
@@ -128,7 +124,9 @@ class Object
       end
 
       begin
-        `#{ruby_cmd(code, opts)}`
+        platform_is_not :opal do
+          `#{ruby_cmd(code, opts)}`
+        end
       ensure
         saved_env.each { |key, value| ENV[key] = value }
         env.keys.each do |key|
@@ -142,13 +140,18 @@ class Object
   def ruby_cmd(code, opts = {})
     body = code
 
-    if code and not File.exists?(code)
+    if code and not File.exist?(code)
       if opts[:escape]
-        code = "'#{code}'"
+        heredoc_separator = "END_OF_RUBYCODE"
+        lines = code.lines
+        until lines.none? {|line| line.start_with? heredoc_separator }
+          heredoc_separator << heredoc_separator
+        end
+
+        body = %Q!-e "$(cat <<'#{heredoc_separator}'\n#{code}\n#{heredoc_separator}\n)"!
       else
-        code = code.inspect
+        body = "-e #{code.inspect}"
       end
-      body = "-e #{code}"
     end
 
     [RUBY_EXE, ENV['RUBY_FLAGS'], opts[:options], body, opts[:args]].compact.join(' ')

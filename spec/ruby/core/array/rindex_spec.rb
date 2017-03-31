@@ -1,5 +1,6 @@
 require File.expand_path('../../../spec_helper', __FILE__)
 require File.expand_path('../fixtures/classes', __FILE__)
+require File.expand_path('../../enumerable/shared/enumeratorized', __FILE__)
 
 # Modifying a collection while the contents are being iterated
 # gives undefined behavior. See
@@ -49,29 +50,29 @@ describe "Array#rindex" do
     array.rindex(array).should == 7
   end
 
-  ruby_version_is "1.8.7" do
-    it "accepts a block instead of an argument" do
-      [4, 2, 1, 5, 1, 3].rindex { |x| x < 2 }.should == 4
-    end
+  it "accepts a block instead of an argument" do
+    [4, 2, 1, 5, 1, 3].rindex { |x| x < 2 }.should == 4
+  end
 
-    it "ignores the block if there is an argument" do
-      [4, 2, 1, 5, 1, 3].rindex(5) { |x| x < 2 }.should == 3
-    end
+  it "ignores the block if there is an argument" do
+    [4, 2, 1, 5, 1, 3].rindex(5) { |x| x < 2 }.should == 3
+  end
 
-    it "rechecks the array size during iteration" do
-      ary = [4, 2, 1, 5, 1, 3]
-      seen = []
-      ary.rindex { |x| seen << x; ary.clear; false }
+  it "rechecks the array size during iteration" do
+    ary = [4, 2, 1, 5, 1, 3]
+    seen = []
+    ary.rindex { |x| seen << x; ary.clear; false }
 
-      seen.should == [3]
-    end
+    seen.should == [3]
+  end
 
-    describe "given no argument and no block" do
-      it "produces an Enumerator" do
-        enum = [4, 2, 1, 5, 1, 3].rindex
-        enum.should be_an_instance_of(enumerator_class)
-        enum.each { |x| x < 2 }.should == 4
-      end
+  describe "given no argument and no block" do
+    it "produces an Enumerator" do
+      enum = [4, 2, 1, 5, 1, 3].rindex
+      enum.should be_an_instance_of(enumerator_class)
+      enum.each { |x| x < 2 }.should == 4
     end
   end
+
+  it_behaves_like :enumeratorized_with_unknown_size, :bsearch, [1,2,3]
 end
